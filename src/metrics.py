@@ -202,53 +202,82 @@ def dAUC(datasetName="Student", epsilon=0.7, group_identifier='sex', group_ident
         
     return saturation_points, cov_for_saturation_points, auc_matrix
 
-def cAUC(datasetName="Student", group_identifier="sex", group_identifier_value=None, epsilon=0.5, k_values=None, coverages=None,\
-         classifier='xgb', bandwith_approch='mean_scotts_rule', skip_model_training=True, skip_distance_calculation=True,\
-            skip_graph_creation=True, skip_bandwith_calculation=True, representation=64, verbose=False):
-    results = {coverage: {k: None for k in k_values} for coverage in coverages}
+def find_saturation_point(cost_values, k_values):
+    max_cost_value = float('inf')
+    saturation_k = k_values[-1]  
 
-    facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, candidate_counterfactuals,\
-			  Factuals, Factuals_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon,\
+    for i in range(1, len(cost_values)):
+        if round(cost_values[i], 3) < round(max_cost_value, 3):
+            max_cost_value = cost_values[i]
+            saturation_k = k_values[i]  
+    return saturation_k, cost_values[i]
+
+def cAUC(datasetName="Student", epsilon=0.5, group_identifier='sex', group_identifier_value=None, classifier='xgb',\
+          bandwith_approch="mean_scotts_rule", upper_limit_for_k=20, lower_limit_range_for_d=None, upper_limit_range_for_d=None, steps=10, skip_distance_calculation=True,\
+                     skip_fgce_calculation=True, skip_model_training=True, skip_bandwith_calculation=True, skip_graph_creation=True, representation=64, verbose=False, coverage_values = [0.25, 0.5, 0.75, 1]):
+    
+    auc_matrix = {}
+    saturation_points = {}
+    cost_for_saturation_points = {}
+
+
+    fgce, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
+			  FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon,\
                 datasetName=datasetName, group_identifier=group_identifier, classifier=classifier, bandwith_approch=bandwith_approch, verbose=verbose,\
                 group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_distance_calculation=skip_distance_calculation,\
                 skip_graph_creation=skip_graph_creation, representation=representation, skip_bandwith_calculation=skip_bandwith_calculation)
-    fgce_init_dict = {"facegroup": facegroup, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
-         "attr_col_mapping": attr_col_mapping, "normalized_group_identifer_value": normalized_group_identifer_value, "numeric_columns": numeric_columns,\
-         "candidate_counterfactuals": candidate_counterfactuals, "Factuals": Factuals, "Factuals_by_group": Factuals_by_group, "node_connectivity": node_connectivity,\
-              "edge_connectivity": edge_connectivity, "feasibility_constraints": feasibility_constraints}
-
-    for coverage in coverages:
-        for k in k_values:
-            results[coverage][k] = main_coverage_constrained_GCFEs_MIP(epsilon=epsilon, datasetName=datasetName, group_identifier=group_identifier, group_identifier_value=group_identifier_value,
-                                skip_model_training=True, skip_graph_creation=True, skip_FACEGroup_calculation=False, skip_distance_calculation=True,
-                                cost_function = "max_vector_distance", k=k, cov=coverage, fgce_init_dict=fgce_init_dict, verbose=verbose)
     
-    saturation_points_cov, y_values_cov, aucs_cov = {}, {}, {}
-    for cov in results:
-        total_costs_group = {}
-        saturation_points, y_values, aucs = {}, {}, {}
+    fgce_init_dict = {"fgce": fgce, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
+         "attr_col_mapping": attr_col_mapping, "normalized_group_identifer_value": normalized_group_identifer_value, "numeric_columns": numeric_columns,\
+         "positive_points": positive_points, "FN": FN, "FN_negatives_by_group": FN_negatives_by_group, "node_connectivity": node_connectivity,\
+              "edge_connectivity": edge_connectivity, "feasibility_constraints": feasibility_constraints}
+    
+     
+    k_values = list(range(1, upper_limit_for_k + 1))
+   
+    for coverage in coverage_values:
+        auc_matrix[coverage] = {}
+        saturation_points[coverage] = {}
+        cost_for_saturation_points[coverage] = {}
+        total_cost_group_0 = []
+        total_cost_group_1 = []
 
-        for k in results[cov]:
-            for group in results[cov][k]:
-                if group not in total_costs_group:
-                    total_costs_group[group] = [results[cov][k][group]["Total Cost"]]
-                else:
-                    total_costs_group[group].append(results[cov][k][group]["Total Cost"])
+        for idx, k in enumerate(k_values):
+            
+            results_per_group, max_cost = main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=3, datasetName='Student', 
+					group_identifier='sex', classifier="lr", bandwith_approch="mean_scotts_rule", k=k, cost_function = "max_vector_distance",
+					group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_distance_calculation=skip_distance_calculation, skip_graph_creation=skip_graph_creation,
+					skip_fgce_calculation=skip_fgce_calculation,  skip_bandwith_calculation=skip_bandwith_calculation, cov_constr_approach="global", cov = coverage,  representation=64, fgce_init_dict=fgce_init_dict, alg='MIP')
+            
+            group_keys = list(results_per_group.keys())
+            
+            total_cost_group_0.append(results_per_group[group_keys[0]]["Total Cost"])
+            total_cost_group_1.append(results_per_group[group_keys[1]]["Total Cost"])
+        
+        AUC_max = auc(k_values, [max_cost] * len(k_values))
+        AUC_group_0 = auc(k_values, total_cost_group_0) / AUC_max
+        AUC_group_1 = auc(k_values, total_cost_group_1) / AUC_max
 
-        for group in total_costs_group:
-            saturation_points[group], y_values[group] = find_saturation_point_and_max_d(total_costs_group[group], k_values)
+        auc_matrix[coverage]["group_0"] = AUC_group_0
+        auc_matrix[coverage]["group_1"] = AUC_group_1
 
-        min_overal_cost = min([min(total_costs_group[group]) for group in total_costs_group])
-        optimal_auc = auc(k_values, [min_overal_cost] * len(k_values))
+        saturation_points[coverage]["group_0"], cost_for_saturation_points[coverage]["group_0"] = find_saturation_point(total_cost_group_0, k_values)
+        saturation_points[coverage]["group_1"], cost_for_saturation_points[coverage]["group_1"] = find_saturation_point(total_cost_group_1, k_values)
 
-        for group in total_costs_group:
-            aucs[group] = auc(k_values, total_costs_group[group]) / optimal_auc
-
-        saturation_points_cov[cov] = saturation_points
-        y_values_cov[cov] = y_values
-        aucs_cov[cov] = aucs
-
-    return saturation_points_cov, y_values_cov, aucs_cov
+        plt.plot(k_values, total_cost_group_0, marker='o', color='red', label='Group 0')
+        plt.plot(k_values, total_cost_group_1, marker='s', color='green', label='Group 1')
+        plt.xlabel('k', fontsize=12, fontfamily='serif')
+        plt.ylabel('Max cost', fontsize=12, fontfamily='serif')
+        plt.text(0.8, 0.2, f'AUC Group 0: {AUC_group_0:.2f}', fontsize=10, ha='center', transform=plt.gca().transAxes)
+        plt.text(0.8, 0.15, f'AUC Group 1: {AUC_group_1:.2f}', fontsize=10, ha='center', transform=plt.gca().transAxes)
+        
+        plt.xticks(k_values)  
+        plt.legend()
+        plt.tight_layout()
+        fig_size = (8, 6) 
+        plt.gcf().set_size_inches(fig_size)
+        plt.savefig(f'max_distance_for_different_values_of_k_{datasetName}_coverage={coverage}.pdf')
+        plt.show()
 
 def plot_k_or_dAUC(datasetName, saturation_points, cov_for_saturation_points, auc_matrix, score='k',\
         expand_left_x_axis=0, expand_right_x_axis=1, expand_bottom_y_axis=0.5, expand_top_y_axis=0.5):

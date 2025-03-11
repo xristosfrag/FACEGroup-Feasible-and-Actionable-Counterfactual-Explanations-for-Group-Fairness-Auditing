@@ -4,10 +4,11 @@ from tqdm import tqdm
 import utils
 import networkx as nx
 from pulp import LpMaximize, LpMinimize, LpBinary, LpProblem, LpVariable, lpSum, LpStatus, PULP_CBC_CMD
+from gurobipy import Model, GRB, quicksum
 from collections import deque
 import heapq
 import time
-
+import random
 random_seed = 482
 np.random.seed(random_seed)
 
@@ -1101,7 +1102,7 @@ class FACEGroup:
 # ====================================================================================================
 	def preprocess_connected_components(self, subgroup, connected_components, factuals, candidate_cfes):
 		"""
-		Preprocesses connected components to filter out those without both factuals and candidate counterfactuals that can be used.
+		Preprocesses connected components to filter out those without both factuals and candidate counterfactuals.
 
 		# Parameters:
 		----------
@@ -1110,65 +1111,187 @@ class FACEGroup:
 		- connected_components: (list) 
 			List of connected components.
 		- factuals: (list)
-			List of indices of factuals.
+			List of indices of factual points.
 		- candidate_cfes: (list)
-			List of indices of positive points.
+			List of indices of candidate counterfactual points.
 
 		# Returns:
 		- connected_components_to_use: (list)
-			List of connected components to use, filtered to contain only those with both factuals and positives.
+			List of connected components to use, filtered to contain only those with both factuals and candidate counterfactuals.
 		- node_to_cc: (dict)
 			Mapping from node index to connected component index.
 		- factuals_with_path_per_group: (list)
 			List of factuals with path per group.
-		- positive_points_with_path_per_group: (list)
-			List of positive points with path per group.
-		- factuals_positives_per_cc: (dict)
-			Mapping from connected component index to lists of factuals and positive points.
-		- positives_per_negative: (dict)
-			Mapping from factual point to associated cfes.
+		- candidate_cfes_with_path_per_group: (list)
+			List of candidate counterfactuals with path per group.
+		- factuals_cfes_per_cc: (dict)
+			Mapping from connected component index to lists of factual and candidate counterfactual points.
+		- cfes_per_factual: (dict)
+			Mapping from factual point to associated candidate counterfactual points.
 		"""
 		connected_components_to_use = []
 		node_to_cc = {}
 		factuals_with_path_per_group = []
-		positive_points_with_path_per_group = []
-		factuals_positives_per_cc = {}
-		positives_per_negative = {}
-		index=0
+		candidate_cfes_with_path_per_group = []
+		factuals_cfes_per_cc = {}
+		cfes_per_factual = {}
+		index = 0
 
 		for connected_component in connected_components:
-			positive_points_with_path = set()
+			candidate_cfes_with_path = set()
 			factuals_with_path = set()
 			subgraph = subgroup.subgraph(connected_component)
-			
 			candidate_cfes_in_subgraph = set(connected_component) & set(candidate_cfes)
 			factuals_in_subgraph = set(connected_component) & set(factuals)
 			
 			if factuals_in_subgraph and candidate_cfes_in_subgraph:
-				for fn in factuals_in_subgraph:	
-					visited_nodes = self.bfs(subgraph, fn)
+				for factual in factuals_in_subgraph:	
+					visited_nodes = self.bfs(subgraph, factual)
 					if len(visited_nodes) > 0:
-						pos = set(visited_nodes) & set(candidate_cfes)
-						if len(pos) > 0:			 
-							factuals_with_path.add(fn)
-							positive_points_with_path.update(pos)
-							positives_per_negative[fn] = pos
+						cfes = set(visited_nodes) & set(candidate_cfes)
+						if len(cfes) > 0: 		 
+							factuals_with_path.add(factual)
+							candidate_cfes_with_path.update(cfes)
+							cfes_per_factual[factual] = cfes
 
-			if len(factuals_with_path) > 0 and len(positive_points_with_path) > 0:
+			if len(factuals_with_path) > 0 and len(candidate_cfes_with_path) > 0:
 				connected_components_to_use.append(connected_component)
-				print(f"Factuals with path to at least one positive point = {len(factuals_with_path)}")
-				print(f"Positive points with path to at least one factual = {len(positive_points_with_path)}")
+				print(f"Factuals with path to at least one candidate counterfactual = {len(factuals_with_path)}")
+				print(f"Candidate counterfactuals with path to at least one factual = {len(candidate_cfes_with_path)}")
 				factuals_with_path_lst = list(factuals_with_path)
-				positive_points_with_path_lst = list(positive_points_with_path)
+				candidate_cfes_with_path_lst = list(candidate_cfes_with_path)
 				factuals_with_path_per_group += factuals_with_path_lst
-				positive_points_with_path_per_group += positive_points_with_path_lst
-				all_points = factuals_with_path_lst + positive_points_with_path_lst
+				candidate_cfes_with_path_per_group += candidate_cfes_with_path_lst
+				all_points = factuals_with_path_lst + candidate_cfes_with_path_lst
 				node_to_cc.update({i: index for i in all_points})
-				factuals_positives_per_cc[index] = [factuals_with_path_lst,positive_points_with_path_lst]
-				index+=1
+				factuals_cfes_per_cc[index] = [factuals_with_path_lst, candidate_cfes_with_path_lst]
+				index += 1
 
-		return connected_components_to_use, node_to_cc, factuals_with_path_per_group, positive_points_with_path_per_group, factuals_positives_per_cc,positives_per_negative
+		return connected_components_to_use, node_to_cc, factuals_with_path_per_group, candidate_cfes_with_path_per_group, factuals_cfes_per_cc, cfes_per_factual
+
+	def get_distance(self, factuals, candidate_cfes, factual_point, candidate_cfe, cost):
+		"""
+		Computes the distance between a given factual point and a candidate counterfactual example (CFE).
+		Parameters:
+		----------
+		- factuals: (list) List of factual points.
+		- candidate_cfes: (list) List of candidate CFEs.
+		- factual_point: The factual point for which the distance is to be computed.
+		- candidate_cfe: The candidate CFE to compute the distance to.
+		- cost: (list of lists) Cost matrix representing distances between factuals and candidate CFEs.
+
+		Returns:
+		- (float) The distance between the given factual point and the candidate CFE.
+		"""
+		factual_index = factuals.index(factual_point)
+		candidate_cfe_index = candidate_cfes.index(candidate_cfe)
+		return cost[factual_index][candidate_cfe_index]
+
+	def get_cfes_greedy_with_binary_search(self, factuals, candidate_cfes, cost, k, coverage_limit, distances):
+		"""
+		Implements a greedy k-center algorithm with binary search to find the best radius `r`
+		that achiecve the desired factual coverage by selecting up to `k` centers while minimizing the maximum distance.
+
+		The method starts with an initial candidate cfe as the first center, then iteratively selects 
+		the farthest candidate cfe to maximize the coverage of factual points within the radius `r`. The 
+		radius is adjusted using binary search to ensure the required coverage threshold is met.
+
+		Parameters:
+		----------
+		- factuals: (list) List of factual points to be covered.
+		- candidate_cfes: (list) List of potential counterfactual explanations (CFEs).
+		- cost: (list of lists) Cost matrix representing distances between factuals and candidate_cfes.
+		- k: (int) Maximum number of selected centers.
+		- coverage_limit: (float) Fraction of factual points that must be covered.
+		- distances: (dict) Precomputed pairwise distances between all candidate cfes.
+
+		Returns:
+		-------
+		- gcfes: (dict) Mapping of factual points to their closest assigned candidate cfe.
+		- max_dist: (float) Maximum distance of factuals to their assigned candidate cfe.
+		- coverage: (float) Fraction of factuals covered.
+
+		If no solution meets the coverage constraint, the function returns `None, max_cost, 0`.
+		"""
+
+		valid_costs = [cost[i][j] for i in range(len(cost)) for j in range(len(cost[0])) if cost[i][j] < 100] 
+		max_cost = max(valid_costs)
+		low, high = min(valid_costs), max(valid_costs)
+		num_factuals_to_cover = len(factuals) * coverage_limit
+		best_solutions = []
+		bst = 0.0001 
+
+		while high-low > bst:
+			covered_factuals = []
+			r = (low + high) / 2
 	
+			selected_centers = []    
+			gcfes = {}
+			min_distance_per_factual = {fn: float('inf') for fn in factuals}
+
+			first_center = random.choice(candidate_cfes)   
+			selected_centers.append(first_center)
+			
+			for i in factuals:
+				dist = self.get_distance(factuals, candidate_cfes, i, first_center, cost)
+				
+				if dist <= r and dist != 100:
+					covered_factuals.append(i)
+					if dist <= min_distance_per_factual[i]:
+						min_distance_per_factual[i] = dist
+						gcfes[i] = first_center  
+
+			while len(covered_factuals) < num_factuals_to_cover and len(selected_centers) < k:
+			
+				farthest_candidate_cfe = None
+				max_distance = 0
+				
+				for candidate_cfe in candidate_cfes:
+					if candidate_cfe not in selected_centers:
+						distance_to_other_candidate_cfes = []
+						for selected_center in selected_centers:
+							dist = distances[selected_center][candidate_cfe]
+							distance_to_other_candidate_cfes.append(dist)
+						max_distance_to_others = max(distance_to_other_candidate_cfes)
+						
+						if max_distance_to_others > max_distance:
+							max_distance = max_distance_to_others
+							farthest_candidate_cfe = candidate_cfe
+
+				selected_centers.append(farthest_candidate_cfe)
+
+				for i in factuals:
+					dist = self.get_distance(factuals, candidate_cfes, i, farthest_candidate_cfe, cost)
+					if dist <= r and dist != 100:
+						covered_factuals.append(i)
+						if dist <= min_distance_per_factual[i]:
+							min_distance_per_factual[i] = dist
+							gcfes[i] = farthest_candidate_cfe  
+
+			if len(covered_factuals) >= num_factuals_to_cover:         
+				max_dist = 0    
+				for i, j in gcfes.items():
+					if j in candidate_cfes:   
+						dist = self.get_distance(factuals, candidate_cfes, i, j, cost)
+						if dist > max_dist:
+							max_dist = dist
+			
+				coverage_1 = len(covered_factuals) / len(factuals)
+				best_solutions.append((gcfes, selected_centers, coverage_1, max_dist, r))
+				high = r  
+			
+			else:
+				low = r   
+
+			
+		if best_solutions:
+			best_solutions.sort(key=lambda x: (abs(x[2] - coverage_limit), x[4]))
+			gcfes, selected_centers, coverage, max_dist, _ = best_solutions[0]
+			return gcfes, max_dist, coverage            
+					
+		print("No solution found.")
+		return None, max_cost, 0
+
 	def get_gcfes_approach_integer_prog_local(self, subgroups, distances, candidate_cfes, factuals):
 		"""
 		Perform the GCFES approach using integer programming locally per connected component.
@@ -1248,17 +1371,17 @@ class FACEGroup:
 								else:
 									dist_per_factual.append(100)
 							vector_distances.append(dist_per_factual)
-
+						valid_costs = [vector_distances[i][j] for i in range(len(vector_distances)) for j in range(len(vector_distances[0])) if vector_distances[i][j] < 100] 
+						maximum_cost = max(valid_costs)
 						gcfes_cc, max_cost, _, coverage = self.select_cfes_mixed_integer_programming(factuals_with_path, positive_points_with_path, vector_distances, k, 1)
 						if max_cost > max_cost_over_ccs:
 							max_cost_over_ccs = max_cost
 
 						gcfes[subgroup_index].update(gcfes_cc)
-						coverage_percent = coverage / len(factuals_with_path)
-						results_per_connected_component[idx]["Coverage"] = coverage_percent
+						results_per_connected_component[idx]["Coverage"] = coverage
 						results_per_connected_component[idx]["Cost"] = max_cost
 						k_per_component[idx] = k
-						print(f"Coverage = {coverage_percent} with {k} cfes")
+						print(f"Coverage = {coverage} with {k} cfes")
 						
 				k_per_component_per_group[subgroup_index] = k_per_component
 			component_with_max_cost = max(results_per_connected_component, key=lambda k: results_per_connected_component[k]['Cost'])
@@ -1266,8 +1389,8 @@ class FACEGroup:
 			results[subgroup_index] = {'Total Coverage': total_coverage_per_group, 'Total Cost': results_per_connected_component[component_with_max_cost]["Cost"], 'Components': results_per_connected_component}
 			print(f"Group {subgroup_index}: K per component for coverage = {k_per_component}. Max cost = {max_cost_over_ccs}. Total k used = {sum(value for value in k_per_component.values())}")
 		
-		return gcfes, results, valid_connected_components_per_subgroup, k_per_component_per_group, candidate_cfes_per_factuals_per_group, factual_positive_per_cc_for_global
-					
+		return gcfes, results, valid_connected_components_per_subgroup, k_per_component_per_group, candidate_cfes_per_factuals_per_group, factual_positive_per_cc_for_global, maximum_cost
+
 	def get_gcfes_approach_integer_prog_global_via_local(self, subgroups, distances, candidate_cfes, factuals, k, cost_function):
 		"""
 		Perform the GCFES approach using integer programming globally by leveraging the local approach for full coverage.
@@ -1333,12 +1456,11 @@ class FACEGroup:
 							else:
 								dist_per_factual.append(100)	
 						vector_distances.append(dist_per_factual)	
-
+					valid_costs = [vector_distances[i][j] for i in range(len(vector_distances)) for j in range(len(vector_distances[0])) if vector_distances[i][j] < 100] 
+					maximum_cost = max(valid_costs)
 					gcfes, max_cost, _, coverage = self.select_cfes_mixed_integer_programming(factuals_with_path, positive_points_with_path, vector_distances, k, 1)
-					coverage_percent = coverage/ len(factuals_with_path)
 					
-					
-					results_per_connected_component[0]["Coverage"] = coverage_percent
+					results_per_connected_component[0]["Coverage"] = coverage
 					results_per_connected_component[0]["Cost"] = max_cost
 					
 					component_with_max_cost = max(results_per_connected_component, key=lambda k: results_per_connected_component[k]['Cost'])	
@@ -1388,9 +1510,9 @@ class FACEGroup:
 
 			print(f"Group {subgroup_index}: K per component for coverage = {k_per_component}. Max cost = {max_cost_value}")
 
-		return 	gcfes, results
+		return 	gcfes, results, maximum_cost
 
-	def get_gcfes_approach_integer_prog_global(self, subgroups, distances, candidate_cfes, factuals, k, coverage_percentage):
+	def get_gcfes_approach_coverage_constrained_global(self, subgroups, distances, candidate_cfes, factuals, k, coverage_percentage, alg="MIP"):
 		"""
 		Perform the GCFES approach using integer programming globally per subgroup.
 
@@ -1401,9 +1523,9 @@ class FACEGroup:
 		- distances: (dict) 
 			Dictionary containing pairwise distances between points in the dataset.
 		- candidate_cfes: (list)
-			List of indices of positive points.
+			List of indices of candidate_cfes.
 		- factuals: (list) 
-			List of indices of factuals.
+			List of indices of factuals points.
 		- k: (int)
 			Maximum number of cfe points to return
 		- coverage_percentage: (float) 
@@ -1415,39 +1537,156 @@ class FACEGroup:
 		"""
 		results = {}
 		gcfes = {}
-		idx = 0.0	
+		idx = 0
 		for _, subgroup in subgroups.items():
 			print(f"Group {idx}")
+		
 			connected_components = list(nx.weakly_connected_components(subgroup))
-			_, node_to_cc, factuals_with_path_per_group, positive_points_with_path_per_group, _, positives_per_negative = self.preprocess_connected_components(subgroup, connected_components, factuals, candidate_cfes)
+			_, node_to_cc, factuals_with_path_per_group, candidate_cfes_with_path_per_group, _, candidate_cfes_per_factual = self.preprocess_connected_components(subgroup, connected_components, factuals, candidate_cfes)
 			gcfes[idx] = {}
 			subgroup_nodes = list(subgroup.nodes())
 			candidate_cfes_in_subgraph = set(subgroup_nodes) & set(candidate_cfes)
 			factuals_in_subgraph = set(subgroup_nodes) & set(factuals)
 			if factuals_in_subgraph and candidate_cfes_in_subgraph:
+			
 				factuals_with_path = factuals_with_path_per_group
-				positive_points_with_path = positive_points_with_path_per_group		
+				candidate_cfes_with_path = candidate_cfes_with_path_per_group		
 				vector_distances = []
 				for factual in factuals_with_path:
 					dist_per_factual = []
-					positive_points_connected = positives_per_negative[factual]
-					for positive_point in positive_points_with_path:
-						if node_to_cc[factual] == node_to_cc[positive_point]:
-							if positive_point in positive_points_connected:
-								dist = distances[factual][positive_point]
+					candidate_cfes_connected = candidate_cfes_per_factual[factual]
+					for candidate_cfe in candidate_cfes_with_path:
+						if node_to_cc[factual] == node_to_cc[candidate_cfe]:
+							if candidate_cfe in candidate_cfes_connected:
+								dist = distances[factual][candidate_cfe]
+
 								dist_per_factual.append(dist)
 							else:
 								dist_per_factual.append(100)	
 						else:
 							dist_per_factual.append(100)	
 					vector_distances.append(dist_per_factual)		
-				gcfes_cc, max_cost, _, coverage = self.select_cfes_mixed_integer_programming(factuals_with_path, positive_points_with_path, vector_distances, k, coverage_percentage)
-				gcfes[idx].update(gcfes_cc)
-			results[idx] = {'Total Coverage': coverage/ len(factuals_with_path), 'Total Cost':max_cost}
-			print(f"Group {idx}: CFEs used = {k}. Max cost = {max_cost}. Coverage = {coverage/len(factuals_with_path)}")	
+				valid_costs = [vector_distances[i][j] for i in range(len(vector_distances)) for j in range(len(vector_distances[0])) if vector_distances[i][j] < 100] 
+				maximum_cost = max(valid_costs)
+				if alg == 'MIP':
+					gcfes_res, max_dist, coverage = self.select_cfes_mixed_integer_programming_gurobi(factuals_with_path, candidate_cfes_with_path, vector_distances, k, coverage_percentage)
+				else:
+					gcfes_res, max_dist, coverage = self.get_cfes_greedy_with_binary_search(factuals_with_path, candidate_cfes_with_path, vector_distances, k, coverage_percentage, distances)
+
+				if gcfes_res:   
+					gcfes[idx] = gcfes_res  # Assign the result to gcfes[idx]
+				else:
+					gcfes[idx] = None
+
+			results[idx] = {'Total Coverage': coverage, 'Total Cost':max_dist}
+			print(f"Group {idx}: CFEs used = {k}. Max cost = {max_dist}. Coverage = {coverage}")	
 			idx += 1
-		return 	gcfes, results
+		
+		return 	gcfes, results, maximum_cost
 	
+	def select_cfes_mixed_integer_programming_gurobi(self, factuals, candidate_cfes, cost, k, coverage_percentage, time_limit=60):
+		"""                                   
+		Selects the CFEs using Mixed Integer Programming with Gurobi, with a time limit.
+
+		Parameters:
+		----------
+		- factuals: (list) List of factuals points
+		- candidate_cfes: (list) List of candidate_cfes points
+		- cost: (list of lists) Cost matrix (distance) between factuals and candidate_cfes
+		- k: (int) Maximum number of CFE points
+		- coverage_percentage: (float) Percentage of points to be covered
+		- time_limit: (int) Maximum time (in seconds) to run the optimization
+
+		Returns:
+		- gcfes: (dict) Mapping of factuals to assigned cfes
+		- max_dist: (float) Maximum distance of factuals to assigned cfes
+		- min_dist: (float) Minimum distance of factuals to assigned cfes
+		- coverage: (float) Fraction of covered factuals points
+		"""
+		
+		valid_costs = [cost[i][j] for i in range(len(cost)) for j in range(len(cost[0])) if cost[i][j] < 100] 
+		maximum_cost = max(valid_costs)
+
+		l = 100  # Large number representing infeasible assignments
+		m = len(factuals)   
+		n = len(candidate_cfes)   
+
+		model = Model("p-center")
+		model.setParam(GRB.Param.TimeLimit, time_limit)
+
+		x = {}  
+		for i in range(m):
+			for j in range(n):
+				if cost[i][j] != l: 
+					x[i, j] = model.addVar(vtype=GRB.BINARY, name=f"x_{i}_{j}")
+
+		y = {j: model.addVar(vtype=GRB.BINARY, name=f"y_{j}") for j in range(n)}   
+
+		d = model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="d")  
+
+		# Objective: Minimize d (the max distance)
+		model.setObjective(d, GRB.MINIMIZE)
+
+		# Constraints
+
+		# Each FN is assigned to at most one cfe
+		for i in range(m):
+			model.addConstr(quicksum(x[i, j] for j in range(n) if (i, j) in x) <= 1)
+
+		# If an FN is assigned to a cfe, that cfe must be selected
+		for i in range(m):
+			for j in range(n):
+				if (i, j) in x:
+					model.addConstr(x[i, j] <= y[j])
+
+		# Coverage constraint: At least `coverage_percentage * m` FNs must be covered
+		model.addConstr(quicksum(x[i, j] for j in range(n) for i in range(m) if (i, j) in x) >= coverage_percentage * m)
+
+		# Limit the number of selected cfes to k
+		model.addConstr(quicksum(y[j] for j in range(n)) <= k)
+
+		# Ensure that all assigned distances are ≤ d
+		for i in range(m):
+			model.addConstr(quicksum(cost[i][j] * x[i, j] for j in range(n) if (i, j) in x) <= d)
+		model.optimize()
+
+		if model.status in [GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL]:  
+			try:  
+				print(f"Objective Value (d): {d.X}")  
+				gcfes = {}  
+				max_dist = 0  
+				min_dist = float('inf')  
+				coverage = 0  
+
+				for j in range(n):  
+					if y[j].X > 0.5:  # Check feasibility before accessing .X  
+						print(f"CFE {candidate_cfes[j]} is selected.")  
+						for i in range(m):  
+							if (i, j) in x and x[i, j].X > 0.5:  
+								gcfes[factuals[i]] = candidate_cfes[j]  
+								dist = cost[i][j]  
+								print(f"- FN {factuals[i]} is covered with cost = {dist}")  
+								coverage += 1  
+								max_dist = max(max_dist, dist)  
+								min_dist = min(min_dist, dist)  
+
+				return gcfes, max_dist, coverage / len(factuals)  
+
+			except AttributeError:  
+				print("Solution found, but some variables are missing values. Model might have hit a time limit.")  
+				
+				return None, maximum_cost, coverage_percentage  
+
+		elif model.status == GRB.INFEASIBLE:  
+			print("Model is infeasible. Computing IIS (Irreducible Inconsistent Subsystem)...")  
+			model.computeIIS()  
+			model.write("infeasible_constraints.ilp")  
+			return None, maximum_cost, coverage_percentage  
+
+		else:  
+			print("No feasible solution found.")  
+			return None, maximum_cost, coverage_percentage
+
 	def select_cfes_mixed_integer_programming(self, factuals, positives, cost, k, coverage_percentage):
 		"""
 		Selects the CFES using mixed integer programming
@@ -1521,4 +1760,4 @@ class FACEGroup:
 									min_dist = dist
 		else:
 			print("\nOptimal solution not found. Consider to try with a larger value of k.\n")
-		return gcfes, max_dist, min_dist, coverage
+		return gcfes, max_dist, min_dist, coverage/len(factuals)

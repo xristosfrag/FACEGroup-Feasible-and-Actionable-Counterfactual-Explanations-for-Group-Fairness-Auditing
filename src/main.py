@@ -800,10 +800,10 @@ def main_coverage_constrained_GCFEs(epsilon=0.2, datasetName='Student', group_id
 # =====================================================================================================================
 #                 		 					coverage-constrained group counterfactuals-MIP
 # =====================================================================================================================
-def main_coverage_constrained_GCFEs_MIP(epsilon=3, datasetName='Student', 
+def main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=3, datasetName='Student', 
 					group_identifier='sex', classifier="lr", bandwith_approch="mean_scotts_rule", k=5, cost_function = "max_vector_distance",
 					group_identifier_value=None, skip_model_training=True, skip_distance_calculation=True, skip_graph_creation=True,
-					skip_FACEGroup_calculation=False,  skip_bandwith_calculation=True, cov_constr_approach="local", cov = 1,  representation=64, fgce_init_dict=None):
+					skip_fgce_calculation=False,  skip_bandwith_calculation=True, cov_constr_approach="local", cov = 1,  representation=64, fgce_init_dict=None, alg='MIP'):
 	"""
 	This function is used to solve the coverage-constrained group counterfactuals problem using binary search
 
@@ -816,11 +816,11 @@ def main_coverage_constrained_GCFEs_MIP(epsilon=3, datasetName='Student',
 	- group_identifier: (str)	
 		the column name of the group identifier
 	- classifier: (str)
-		the classifier to use for the FACEGroup algorithm
+		the classifier to use for the FGCE algorithm
 	- k: (int)
 		maximum number of cfes to return for each group
 	- cost_function: (str)
-		the cost function to use for the FACEGroup algorithm
+		the cost function to use for the FGCE algorithm
 	- group_identifier_value: (int)
 		the value of the group identifier
 	- skip_model_training: (boolean)
@@ -830,7 +830,7 @@ def main_coverage_constrained_GCFEs_MIP(epsilon=3, datasetName='Student',
 		if it will skip the graph creation and load it if it exists or not
 	- skip_bandwith_calculation: (boolean)
 		if it will skip the bandwith calculation and load it if it exists or not
-	- skip_FACEGroup_calculation: (boolean)
+	- skip_fgce_calculation: (boolean)
 		if it will skip the group cfes calculation and load it if it exists or not
 	- cov_constr_approach: (str)
 		the approach to use for the coverage constraint
@@ -839,11 +839,11 @@ def main_coverage_constrained_GCFEs_MIP(epsilon=3, datasetName='Student',
 	# Returns:
 	----------------
 	- results: (dict)
-		dictionary containing the final results of the FACEGroup-Group algorithm
+		dictionary containing the final results of the FGCE-Group algorithm
 	"""
 	if fgce_init_dict:
 		facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, candidate_counterfactuals,\
-			  Factuals, Factuals_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = fgce_init_dict["facegroup"],\
+			  Factuals, Factuals_by_group, node_connectivity, edge_connectivity, feasibility_constraints = fgce_init_dict["facegroup"],\
 			  fgce_init_dict["graph"], fgce_init_dict["distances"], fgce_init_dict["data"],\
 			  fgce_init_dict["data_np"], fgce_init_dict["data_df_copy"], fgce_init_dict["attr_col_mapping"],\
 			  fgce_init_dict["normalized_group_identifer_value"], fgce_init_dict["numeric_columns"], fgce_init_dict["candidate_counterfactuals"],\
@@ -859,8 +859,10 @@ def main_coverage_constrained_GCFEs_MIP(epsilon=3, datasetName='Student',
 	results = {}	
 	file_path = f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}coverage_constrained_GCFEs{sep}{cov_constr_approach}{sep}stats{sep}results_{datasetName}_eps{epsilon}_k_{k}_cov_{cov}_cost_function_{cost_function}.json"
 	gcfes_path = f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}coverage_constrained_GCFEs{sep}{cov_constr_approach}{sep}gcfes{sep}gcfes_{datasetName}_eps{epsilon}_k_{k}_cov_{cov}_cost_function_{cost_function}.json"
-	
-	if skip_FACEGroup_calculation and os.path.exists(file_path):
+	os.makedirs(os.path.dirname(file_path), exist_ok=True)
+	os.makedirs(os.path.dirname(gcfes_path), exist_ok=True)
+
+	if skip_fgce_calculation and os.path.exists(file_path):
 		results = json.load(open(file_path, "r"))
 		return results
 	else:
@@ -870,10 +872,10 @@ def main_coverage_constrained_GCFEs_MIP(epsilon=3, datasetName='Student',
 		print(f"Computing group cfes...")
 
 		if cov_constr_approach == "local":
-			gcfes, results, _, _, _, _ = facegroup.get_gcfes_approach_integer_prog_local(subgroups, distances, candidate_counterfactuals, Factuals) 
+			gcfes, results, _, _, _, _, max_cost = facegroup.get_gcfes_approach_integer_prog_local(subgroups, distances, candidate_counterfactuals, Factuals) 
 			
 		elif cov_constr_approach == "global":
-			gcfes, results = facegroup.get_gcfes_approach_integer_prog_global(subgroups, distances, candidate_counterfactuals, Factuals, k, cov)
+			gcfes, results, max_cost = facegroup.get_gcfes_approach_coverage_constrained_global(subgroups, distances, candidate_counterfactuals, Factuals, k, cov, alg)
 		
 		end_time = time.time()
 		if not os.path.exists(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}coverage_constrained_GCFEs"):
@@ -883,4 +885,4 @@ def main_coverage_constrained_GCFEs_MIP(epsilon=3, datasetName='Student',
 			json.dump(results, outfile)
 		with open(gcfes_path, "w") as outfile:
 			json.dump(gcfes, outfile)
-	return results
+	return results, max_cost
