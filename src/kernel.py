@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.model_selection import GridSearchCV, LeaveOneOut
 from sklearn.neighbors import KernelDensity
-from FGCE import *
+from FACEGroup import *
 
 EPSILON = 1e-8
 

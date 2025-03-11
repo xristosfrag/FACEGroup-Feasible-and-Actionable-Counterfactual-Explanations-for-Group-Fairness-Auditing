@@ -5,7 +5,7 @@ import pickle as pk
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from FGCE import *
+from FACEGroup import *
 from main import *
 from kernel import *
 from dataLoader import *
@@ -22,10 +22,10 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Input
 
 
-def get_FGCE_Directory():
-    """Get the path of the 'FGCE-Feasible-Group-Counterfactual-Explanations-for-Auditing-Fairness' directory."""
+def get_FACEGroup_Directory():
+    """Get the path of the 'FACEGroup-Feasible-and-Actionable-Counterfactual-Explanations-for-Group-Fairness-Auditing' directory."""
     current_dir = os.getcwd()
-    target_dir = 'FGCE-Feasible-Group-Counterfactual-Explanations-for-Auditing-Fairness'
+    target_dir = 'FACEGroup-Feasible-and-Actionable-Counterfactual-Explanations-for-Group-Fairness-Auditing'
     
     while os.path.basename(current_dir) != target_dir:
         current_dir = os.path.dirname(current_dir)
@@ -38,12 +38,12 @@ def get_path_separator():
     """Get the system-specific directory separator."""
     return os.sep
 
-FGCE_DIR = get_FGCE_Directory()
-sys.path.append(FGCE_DIR)
+FACEGroup_DIR = get_FACEGroup_Directory()
+sys.path.append(FACEGroup_DIR)
 sep = get_path_separator()
 
 
-def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=True, bandwith_approch='optimal', classifier='xgb', skip_model_training=False):
+def initialize_FACEGroup_attributes(datasetName='Student', skip_bandwith_calculation=True, bandwith_approch='optimal', classifier='xgb', skip_model_training=False):
     data, FEATURE_COLUMNS, TARGET_COLUMNS, _, _, \
         _, _, _, _ = load_dataset(datasetName=datasetName)
     if 'GermanCredit' in datasetName:
@@ -59,19 +59,19 @@ def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=
         shuffle=True
     )
 
-    if not os.path.exists(f"{FGCE_DIR}{sep}tmp"):
-        os.makedirs(os.path.join(FGCE_DIR, 'tmp'))
+    if not os.path.exists(f"{FACEGroup_DIR}{sep}tmp"):
+        os.makedirs(os.path.join(FACEGroup_DIR, 'tmp'))
 
-    if not os.path.exists(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}"):
-        os.makedirs(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}")
+    if not os.path.exists(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}"):
+        os.makedirs(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}")
 
     train_model = None
     param_grid = None
     model = None
     if classifier == "lr":
-        if skip_model_training and "LR_classifier_data.pk" in os.listdir(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}"):
+        if skip_model_training and "LR_classifier_data.pk" in os.listdir(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}"):
             print("Loading classifier from file ...")
-            model = pk.load(open(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}LR_classifier_data.pk", "rb"))
+            model = pk.load(open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}LR_classifier_data.pk", "rb"))
         else:
             param_grid = {
                 'C': [0.001, 0.01, 0.1, 1, 5, 10, 50, 100, 200], 
@@ -80,19 +80,19 @@ def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=
             model = LogisticRegression(max_iter=10000)
             train_model = 'lr'
     elif classifier == "xgb":
-        if skip_model_training and "XGB_classifier_data.pk" in os.listdir(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}"):
+        if skip_model_training and "XGB_classifier_data.pk" in os.listdir(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}"):
             print("Loading classifier from file ...")
-            model = pk.load(open(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}XGB_classifier_data.pk", "rb"))
+            model = pk.load(open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}XGB_classifier_data.pk", "rb"))
         else:
             param_grid = {
-            'n_estimators': [50, 100, 200, 500],  # Increase upper bound
-            'max_depth': [3, 5, 7, 10, 15],  # Add deeper trees
-            'learning_rate': [0.01, 0.05, 0.1, 0.2],  # Improve learning rate choices
-            'subsample': [0.5, 0.7, 0.9, 1],  # Add 0.9 to test near-full dataset
-            'colsample_bytree': [0.5, 0.7, 0.9, 1],  # Add 0.9 for better diversity
-            'gamma': [0, 0.1, 0.5, 1, 5],  # Prevent overfitting
-            'reg_alpha': [0, 0.01, 0.1, 1],  # L1 regularization
-            'reg_lambda': [1, 5, 10],  # L2 regularization
+            'n_estimators': [50, 100, 200, 500],
+            'max_depth': [3, 5, 7, 10, 15],
+            'learning_rate': [0.01, 0.05, 0.1, 0.2],
+            'subsample': [0.5, 0.7, 0.9, 1],
+            'colsample_bytree': [0.5, 0.7, 0.9, 1],
+            'gamma': [0, 0.1, 0.5, 1, 5],
+            'reg_alpha': [0, 0.01, 0.1, 1],
+            'reg_lambda': [1, 5, 10],
             }
 
             model = xgb.XGBClassifier(
@@ -101,23 +101,23 @@ def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=
             )
             train_model = 'xgb'
     elif classifier == "rf":
-        if skip_model_training and "RF_classifier_data.pk" in os.listdir(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}"):
+        if skip_model_training and "RF_classifier_data.pk" in os.listdir(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}"):
             print("Loading classifier from file ...")
-            model = pk.load(open(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}RF_classifier_data.pk", "rb"))
+            model = pk.load(open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}RF_classifier_data.pk", "rb"))
         else:
             param_grid = {
-            'n_estimators': [100, 200, 300, 400],  # Number of trees
-            'max_depth': [None, 10, 20, 30],  # Maximum depth of each tree
-            'min_samples_split': [2, 5, 10],  # Minimum samples to split a node
-            'min_samples_leaf': [1, 2, 4],  # Minimum samples required to be a leaf node
-            'bootstrap': [True, False],  # Whether to use bootstrap sampling
+            'n_estimators': [100, 200, 300, 400],
+            'max_depth': [None, 10, 20, 30],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'bootstrap': [True, False],
             }
             model = RandomForestClassifier(random_state=42)
             train_model = 'rf'
     elif classifier == "dnn":
-        if skip_model_training and "DNN_classifier_data.h5" in os.listdir(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}"):
+        if skip_model_training and "DNN_classifier_data.h5" in os.listdir(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}"):
             print("Loading classifier from file ...")
-            model = tf.keras.models.load_model(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}DNN_classifier_data.keras")
+            model = tf.keras.models.load_model(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}DNN_classifier_data.keras")
         else:
             def create_dnn_model(optimizer='adam', dropout_rate=0.5, hidden_units=32):
                 model = Sequential()
@@ -128,21 +128,17 @@ def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=
                 model.add(Dense(1, activation='sigmoid'))
                 model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
                 return model
-
-            # Wrap the model using KerasClassifier
             model = KerasClassifier(
                 model=create_dnn_model,
                 verbose=0,
-                epochs=10,  # Lower epochs for faster tuning
+                epochs=10,
                 batch_size=32
             )
-
-            # Define hyperparameter search space
             param_grid = {
                 'model__optimizer': ['adam', 'rmsprop'],
                 'model__dropout_rate': [0.3, 0.5],
                 'model__hidden_units': [32, 64],
-                'batch_size': [8, 16],  # Smaller batch sizes
+                'batch_size': [8, 16],
                 'epochs': [5, 10]
             }
             train_model = 'dnn'
@@ -150,14 +146,12 @@ def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=
         raise ValueError("Invalid classifier type. Supported types are 'lr', 'xgb', and 'dnn'.")
 
     if train_model != None:	
-        # Perform hyperparameter tuning
         random_search = RandomizedSearchCV(
             estimator=model,
             param_distributions=param_grid,
-            n_iter=15,  # Run more iterations for better search
+            n_iter=15,
             cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
-            scoring='balanced_accuracy',  # Better than recall-only
-            ## dont assign all cpus to the search. istead assing max - 5
+            scoring='balanced_accuracy',
             n_jobs=max(1, (os.cpu_count() or 1) - 5),
             verbose=0,
             random_state=42
@@ -165,27 +159,23 @@ def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=
 
         print(f"Starting {classifier} hyperparameter search...")
         random_search.fit(X_train, y_train)
-
-        # Retrieve best model (already trained during hyperparameter search)
         model = random_search.best_estimator_
-
-        # Print results
         print(f"\nBest {classifier} Hyperparameters: {random_search.best_params_}")
         print(f"Best cross-validated accuracy: {random_search.best_score_:.4f}")
         print(f"Training Accuracy: {model.score(X_train, y_train):.4f}")
         print(f"Testing Accuracy: {model.score(X_test, y_test):.4f}")
 
-    if not os.path.exists(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}"):
-        os.makedirs(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}")
+    if not os.path.exists(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}"):
+        os.makedirs(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}")
 
     if train_model == 'lr':
-        pk.dump(model, open(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}LR_classifier_data.pk", 'wb'))
+        pk.dump(model, open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}LR_classifier_data.pk", 'wb'))
     elif train_model == 'xgb':
-        pk.dump(model, open(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}XGB_classifier_data.pk", 'wb'))
+        pk.dump(model, open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}XGB_classifier_data.pk", 'wb'))
     elif train_model == 'rf':
-        pk.dump(model, open(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}RF_classifier_data.pk", 'wb'))
+        pk.dump(model, open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}RF_classifier_data.pk", 'wb'))
     elif train_model == 'dnn':
-        model.model.save(f"{FGCE_DIR}{sep}tmp{sep}{datasetName}{sep}DNN_classifier_data.keras")
+        model.model.save(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}DNN_classifier_data.keras")
 
     data = data.drop_duplicates()
     data = data.reset_index(drop=True)
@@ -212,7 +202,9 @@ def initialize_FGCE_attributes(datasetName='Student', skip_bandwith_calculation=
 
     return data, data_np, X, FEATURE_COLUMNS, TARGET_COLUMNS, kernel, model
 
-def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method, max_d, k_values, x_size, y_size, tick_params_size):
+def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method, max_d, k_values, x_size, y_size, tick_params_size, 
+              ax1_ylabel=True, ax2_ylabel=True, legend_inside=True, legend_fontsize=16, loc="best"):
+    
     plt.style.use('seaborn-muted')
     plt.rcParams.update({
         "font.family": "serif",
@@ -235,8 +227,11 @@ def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method,
 
     # First axis
     ax1.plot(x_values, face_wij, '--o', color=color_face_wij, label="Face Wij Cost", markersize=8, alpha=0.9, linewidth=4)
-    ax1.plot(x_values_offset, gfce_wij, '--o', color=color_gfce_wij, label="FGCE Wij Cost", markersize=8, alpha=0.9, linewidth=4)
-    ax1.set_ylabel("Avg Wij Cost", fontsize=tick_params_size)
+    ax1.plot(x_values_offset, gfce_wij, '--o', color=color_gfce_wij, label="FACEGroup Wij Cost", markersize=8, alpha=0.9, linewidth=4)
+    
+    if ax1_ylabel:
+        ax1.set_ylabel("Avg Wij Cost", fontsize=tick_params_size)
+    
     ax1.set_xticks(x_values)
     ax1.set_xticklabels([int(k) for k in k_values])
     ax1.set_xlabel("k", fontsize=tick_params_size)
@@ -245,38 +240,40 @@ def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method,
 
     ax2 = ax1.twinx()
     ax2.plot(x_values, face_dists, '-o', color=color_face_dists, label="Face Vector Costs", markersize=8, alpha=0.9, linewidth=4)
-    ax2.plot(x_values_offset, gfce_dists, '-o', color=color_gfce_dists, label="FGCE Vector Costs", markersize=8, alpha=0.9, linewidth=4)
-    ax2.set_ylabel("Avg Vector Cost", fontsize=tick_params_size)
-
-    # Combine legends from both axes
-    handles1, labels1 = ax1.get_legend_handles_labels()
-    handles2, labels2 = ax2.get_legend_handles_labels()
-    handles = handles1 + handles2
-    labels = labels1 + labels2
-
-    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
-    plt.tight_layout(pad=0)
-
-    plt.savefig(f"{FGCE_DIR}/tmp/{datasetName}/figs/Coverage_constrained_face_gface_comparison_d_method_{d_method}_maxd_{max_d}_normalized.pdf",
-                bbox_inches='tight', dpi=300)
-
+    ax2.plot(x_values_offset, gfce_dists, '-o', color=color_gfce_dists, label="FACEGroup Vector Costs", markersize=8, alpha=0.9, linewidth=4)
     
-    # Create a separate figure for the legend
-    fig_legend = plt.figure(figsize=(4, 2))
-    ax_legend = fig_legend.add_subplot(111)
+    if ax2_ylabel:
+        ax2.set_ylabel("Avg Vector Cost", fontsize=tick_params_size)
 
-    face_wij_line = Line2D([0, 0], [0, 2], linestyle='--', marker='o', color=color_face_wij, markersize=8, linewidth=4, label="Face Wij Costs")
-    gfce_wij_line = Line2D([0, 0], [0, 1], linestyle='--', marker='o', color=color_gfce_wij, markersize=8, linewidth=4, label="FGCE Wij Costs")
-    face_dists_line = Line2D([0, 1], [0, 0], linestyle='-', marker='o', color=color_face_dists, markersize=8, linewidth=4, label="Face Vector Costs")
-    gfce_dists_line = Line2D([0, 1], [0, 0], linestyle='-', marker='o', color=color_gfce_dists, markersize=8, linewidth=4, label="FGCE Vector Costs")
-    ax_legend.legend([face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line], \
-                     [line.get_label() for line in [face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line]], loc='center', fontsize=14, frameon=False)
-    ax_legend.axis('off')
-    fig_legend.savefig(f"{FGCE_DIR}/tmp/{datasetName}/figs/{datasetName}_legend.pdf",
+    if legend_inside:
+        handles1, labels1 = ax1.get_legend_handles_labels()
+        handles2, labels2 = ax2.get_legend_handles_labels()
+        handles = handles1 + handles2
+        labels = labels1 + labels2
+        ax1.legend(handles, labels, loc=loc, fontsize=legend_fontsize)
+        fig.savefig(f"{FACEGroup_DIR}/tmp/{datasetName}/figs/Coverage_constrained_face_gface_comparison_d_method_{d_method}_maxd_{max_d}_normalized.pdf",
                     bbox_inches='tight', dpi=300)
+    else:
+        fig.savefig(f"{FACEGroup_DIR}/tmp/{datasetName}/figs/Coverage_constrained_face_gface_comparison_d_method_{d_method}_maxd_{max_d}_normalized_no_legend.pdf",
+                    bbox_inches='tight', dpi=300)
+
+        fig_legend = plt.figure(figsize=(4, 2))
+        ax_legend = fig_legend.add_subplot(111)
+
+        face_wij_line = Line2D([0, 0], [0, 2], linestyle='--', marker='o', color=color_face_wij, markersize=8, linewidth=4, label="Face Wij Costs")
+        gfce_wij_line = Line2D([0, 0], [0, 1], linestyle='--', marker='o', color=color_gfce_wij, markersize=8, linewidth=4, label="FACEGroup Wij Costs")
+        face_dists_line = Line2D([0, 1], [0, 0], linestyle='-', marker='o', color=color_face_dists, markersize=8, linewidth=4, label="Face Vector Costs")
+        gfce_dists_line = Line2D([0, 1], [0, 0], linestyle='-', marker='o', color=color_gfce_dists, markersize=8, linewidth=4, label="FACEGroup Vector Costs")
+
+        ax_legend.legend([face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line], 
+                         [line.get_label() for line in [face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line]], 
+                         loc='center', fontsize=legend_fontsize, frameon=False)
+        ax_legend.axis('off')
+
+        fig_legend.savefig(f"{FACEGroup_DIR}/tmp/{datasetName}/figs/{datasetName}_legend.pdf",
+                           bbox_inches='tight', dpi=300)
     plt.show()
 
-    
 def nice_numbers(range_min, range_max, num_ticks, score='k'):
     """
     Generate "nice" numbers for a given range.
@@ -284,60 +281,59 @@ def nice_numbers(range_min, range_max, num_ticks, score='k'):
     Parameters
     ----------
     range_min : float
-        The minimum value of the range
+        The minimum value of the range.
     range_max : float
-        The maximum value of the range
+        The maximum value of the range.
     num_ticks : int
-        The number of ticks to generate
+        The number of ticks to generate.
     score : str
-        The score type ('k' or 'd')
+        The score type ('k' or 'd').
+
     Returns
     -------
     ticks : numpy.ndarray
         An array of "nice" numbers for the given range.
     """
+    if range_min >= range_max:
+        raise ValueError("range_min must be less than range_max.")
+    # if score == 'k' and num_ticks > range_max - range_min:
+    #     raise ValueError("num_ticks must be greater than the range size.")
+        
     range_size = range_max - range_min
-
-    tick_spacing = range_size / (num_ticks - 1)
-
-    # Find a "nice" number for the tick spacing
-    exponent = np.floor(np.log10(tick_spacing))
-    fraction = tick_spacing / 10**exponent
-
-    if fraction < 1.5:
-        nice_fraction = 1
-    elif fraction < 3:
-        nice_fraction = 2
-    elif fraction < 7:
-        nice_fraction = 5
-    else:
-        nice_fraction = 10
-
-    nice_tick_spacing = nice_fraction * 10**exponent
+    raw_spacing = range_size / (num_ticks - 1)
+    
+    exponent = np.floor(np.log10(raw_spacing))
+    fraction = raw_spacing / (10**exponent)
 
     if score == 'k':
-        min_tick = np.ceil(range_min / nice_tick_spacing) * nice_tick_spacing
-        max_tick = np.ceil(range_max / nice_tick_spacing) * nice_tick_spacing
+        if fraction < 1.5:
+            nice_fraction = 1
+        elif fraction < 2.5:
+            nice_fraction = 2
+        elif fraction < 3.5:
+            nice_fraction = 3
+        elif fraction < 4.5:
+            nice_fraction = 4
+        elif fraction < 7:
+            nice_fraction = 5
+        else:
+            nice_fraction = 10
 
-        ticks = np.arange(min_tick, max_tick + nice_tick_spacing, nice_tick_spacing)
+        nice_tick_spacing = nice_fraction * 10**exponent
+        ticks = range_min + np.arange(num_ticks)*nice_tick_spacing
+        ticks = ticks.astype(int)
 
-        while len(ticks) != num_ticks:
-            ticks = nice_numbers(range_min, range_max+1, num_ticks)
-
-    if score == 'd':
-        # Adjust the tick spacing to be smaller for 'd' but still within a reasonable range
-        nice_tick_spacing = max(range_min, nice_tick_spacing / 2)
-
-        min_tick = np.round(range_min / nice_tick_spacing) * nice_tick_spacing
-        max_tick = np.round(range_max / nice_tick_spacing) * nice_tick_spacing
-
-        ticks = np.linspace(min_tick, max_tick, num_ticks)
-
-        # Ensure ticks are within bounds
-        if ticks[0] < range_min:
-            ticks += (range_min - ticks[0])
-        if ticks[-1] > range_max:
-            ticks -= (ticks[-1] - range_max)
+    elif score == 'd':
+        # nice_options = [1, 2, 3, 4, 5, 10]
+        nice_options = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        for option in nice_options:
+            if fraction <= option:
+                nice_fraction = option
+                break
+        nice_tick_spacing = nice_fraction * 10**exponent
+        if range_min + (num_ticks - 1) * nice_tick_spacing < range_max:
+            nice_tick_spacing = (range_max - range_min) / (num_ticks - 1)
+        ticks = range_min + np.arange(num_ticks)*nice_tick_spacing
         ticks = np.round(ticks, 2)
 
     return ticks
@@ -351,12 +347,12 @@ def face_comparison(datasetName="Student", epsilon=3, bandwith_approch="mean_sco
     gfce_dists = []
     gfce_wij = []
 
-    fgce, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
-                FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FGCE(epsilon=epsilon,\
+    facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
+                FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon=epsilon,\
                     datasetName=datasetName, group_identifier=group_identifier, classifier=classifier, bandwith_approch=bandwith_approch,\
                     group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_bandwith_calculation=skip_bandwith_calculation,\
                     skip_graph_creation=skip_graph_creation, skip_distance_calculation=skip_distance_calculation, representation=representation)
-    fgce_init_dict = {"fgce": fgce, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
+    fgce_init_dict = {"facegroup": facegroup, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
             "attr_col_mapping": attr_col_mapping, "normalized_group_identifer_value": normalized_group_identifer_value, "numeric_columns": numeric_columns,\
             "positive_points": positive_points, "FN": FN, "FN_negatives_by_group": FN_negatives_by_group, "node_connectivity": node_connectivity,\
                 "edge_connectivity": edge_connectivity, "feasibility_constraints": feasibility_constraints}
@@ -370,7 +366,7 @@ def face_comparison(datasetName="Student", epsilon=3, bandwith_approch="mean_sco
               face_wij_distances, gfce_wij_distances = main_coverage_constrained_GCFEs(epsilon=epsilon,
                                 datasetName=datasetName, group_identifier=group_identifier,
                                 classifier='xgb', compare_with_Face=True, skip_distance_calculation=skip_distance_calculation,
-                                skip_model_training=skip_model_training, skip_graph_creation=skip_graph_creation, skip_fgce_calculation=False,
+                                skip_model_training=skip_model_training, skip_graph_creation=skip_graph_creation, skip_FACEGroup_calculation=False,
                                 k=cfes, max_d = max_d, cost_function="max_path_cost", fgce_init_dict=fgce_init_dict, bst=bst)
 
         if face_vector_distances == None:
@@ -387,8 +383,8 @@ def get_graph_stats(epsilon=0.4,\
         datasetName='Adult', group_identifier='sex', group_identifier_value=None, bandwith_approch="mean_scotts_rule", classifier='xgb',\
 		skip_model_training=True, skip_distance_calculation=True, skip_graph_creation=True, skip_bandwith_calculation=True, verbose=False):
   
-  fgce, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
-    FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints = initialize_FGCE(epsilon=epsilon,\
+  facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
+    FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints = initialize_FACEGroup(epsilon=epsilon,\
     datasetName=datasetName, group_identifier=group_identifier, bandwith_approch=bandwith_approch, classifier=classifier,\
     group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_distance_calculation=skip_distance_calculation,\
     skip_graph_creation=skip_graph_creation, skip_bandwith_calculation=skip_bandwith_calculation, verbose=verbose)

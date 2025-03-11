@@ -8,16 +8,23 @@ from aif360.sklearn.datasets import fetch_compas
 from sklearn.model_selection import train_test_split
 from folktables import ACSDataSource, ACSIncome
 
-def get_FGCE_Directory():
-    """Get the path of the 'FGCE-Feasible-Group-Counterfactual-Explanations-for-Auditing-Fairness' directory."""
+def get_FACEGroup_Directory():
+    """Get the path of the 'FACEGroup-Feasible-and-Actionable-Counterfactual-Explanations-for-Group-Fairness-Auditing' directory."""
     current_dir = os.getcwd()
-    while os.path.basename(current_dir) != 'FGCE-Feasible-Group-Counterfactual-Explanations-for-Auditing-Fairness':
+    target_dir = 'FACEGroup-Feasible-and-Actionable-Counterfactual-Explanations-for-Group-Fairness-Auditing'
+    
+    while os.path.basename(current_dir) != target_dir:
         current_dir = os.path.dirname(current_dir)
         if current_dir == os.path.dirname(current_dir):
             return None
         
     return current_dir
-FGCE_DIR = get_FGCE_Directory()
+
+def get_path_separator():
+    """Get the system-specific directory separator."""
+    return os.sep
+
+FACEGroup_DIR = get_FACEGroup_Directory()
 
 
 def load_dataset(datasetName='Student'):
@@ -51,7 +58,7 @@ def load_german_credit():
         'A94': ('male', 'married/widowed'),
         'A95': ('female', 'single')}
      
-    data_df = pd.read_csv(f"{FGCE_DIR}/data/GermanCredit.data", header=None, delim_whitespace = True)
+    data_df = pd.read_csv(f"{FACEGroup_DIR}/data/GermanCredit.data", header=None, delim_whitespace = True)
     data_df.columns = column_names
     data_df[data_df.columns[-1]] = 2 - data_df[data_df.columns[-1]]
     data_df['Sex'], data_df['Marital-Status'] = zip(*data_df['Sex'].map(status_sex_mapping))
@@ -72,7 +79,7 @@ def load_german_credit():
     return data, FEATURE_COLUMNS, TARGET_COLUMNS, numeric_columns, categorical_columns, min_max_scaler, data_df_copy, [], one_hot_encode_features
 
 def load_student():
-    data_df = pd.read_csv(f"{FGCE_DIR}/data/student.csv")
+    data_df = pd.read_csv(f"{FACEGroup_DIR}/data/student.csv")
     TARGET_COLUMNS = data_df.columns[-1]
     data = data_df.drop(columns=[TARGET_COLUMNS])
     data, numeric_columns, categorical_columns,one_hot_encode_features = preprocess_dataset(data, continuous_features=[])
@@ -103,7 +110,7 @@ def load_compas():
     return data, FEATURE_COLUMNS, TARGET_COLUMNS, numeric_columns, categorical_columns, min_max_scaler, data_df_copy, [], one_hot_encode_features
 
 def load_adult():
-    data_df = pd.read_csv(f"{FGCE_DIR}/data/adult.csv")
+    data_df = pd.read_csv(f"{FACEGroup_DIR}/data/adult.csv")
     TARGET_COLUMNS = data_df.columns[-1]
     data = data_df.drop(columns=[TARGET_COLUMNS])
 
@@ -121,7 +128,7 @@ def load_adult():
     return data, FEATURE_COLUMNS, TARGET_COLUMNS, numeric_columns, categorical_columns, min_max_scaler, data_df_copy, [], one_hot_encode_features
 
 def load_heloc():
-    data_df = pd.read_csv(f"{FGCE_DIR}/data/heloc.csv")
+    data_df = pd.read_csv(f"{FACEGroup_DIR}/data/heloc.csv")
     data_df = data_df[(data_df.iloc[:, 1:] >= 0).all(axis=1)]
     data_df = data_df.reset_index(drop=True)
     data_df_copy = data_df.copy()
@@ -150,9 +157,9 @@ def load_heloc():
 
 def load_ACSData(datasetName):
     if datasetName == "AdultCalifornia":
-        data_df = pd.read_csv(f"{FGCE_DIR}/data/AdultCalifornia.csv")
+        data_df = pd.read_csv(f"{FACEGroup_DIR}/data/AdultCalifornia.csv")
     elif datasetName == "AdultLouisiana":
-        data_df = pd.read_csv(f"{FGCE_DIR}/data/AdultLouisiana.csv")
+        data_df = pd.read_csv(f"{FACEGroup_DIR}/data/AdultLouisiana.csv")
     data_df.rename(columns={
         'Age': 'age',
         'Sex': 'sex',

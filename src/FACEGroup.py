@@ -11,7 +11,7 @@ import time
 random_seed = 482
 np.random.seed(random_seed)
 
-class FGCE:
+class FACEGroup:
 	def __init__(self, data, kernel_obj, feature_columns, target_column, epsilon, clf=None):
 		self._data = data
 		self._epsilon = epsilon
@@ -244,7 +244,7 @@ class FGCE:
 		])
 		coverage_matrix = np.where(cost_matrix > 0, 1, 0)
 
-		model = LpProblem("Cost_Constrained_FGCE", LpMaximize)
+		model = LpProblem("Cost_Constrained_FACEGroup", LpMaximize)
 
 		# Constraint (5): Binary constraint for each candidate and assignment
 		u = {j: LpVariable(f"u_{j}", cat="Binary") for j in range(num_counterfactuals)}
