@@ -2,7 +2,7 @@ from sklearn.metrics import auc
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from main import main_cost_constrained_GCFEs, main_coverage_constrained_GCFEs_MIP
+from main import main_cost_constrained_GCFEs, main_coverage_constrained_GCFEs_Greedy_MIP
 from test_utils import nice_numbers, dataset_feature_descriptions
 from main import *
 
@@ -213,23 +213,24 @@ def find_saturation_point(cost_values, k_values):
     return saturation_k, cost_values[i]
 
 def cAUC(datasetName="Student", epsilon=0.5, group_identifier='sex', group_identifier_value=None, classifier='xgb',\
-          bandwith_approch="mean_scotts_rule", upper_limit_for_k=20, lower_limit_range_for_d=None, upper_limit_range_for_d=None, steps=10, skip_distance_calculation=True,\
-                     skip_fgce_calculation=True, skip_model_training=True, skip_bandwith_calculation=True, skip_graph_creation=True, representation=64, verbose=False, coverage_values = [0.25, 0.5, 0.75, 1]):
+        bandwith_approch="mean_scotts_rule", upper_limit_for_k=20, skip_distance_calculation=True,\
+        skip_FACEGroup_calculation=True, skip_model_training=True, skip_bandwith_calculation=True,\
+        skip_graph_creation=True, representation=64, verbose=False, coverage_values = [0.25, 0.5, 0.75, 1],\
+        cost_function="max_vector_distance", cov_constr_approach="global", alg='MIP', plot_=False):
     
     auc_matrix = {}
     saturation_points = {}
     cost_for_saturation_points = {}
 
 
-    fgce, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
-			  FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon,\
+    facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, candidate_counterfactuals,\
+			  Factuals, Factuals_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon,\
                 datasetName=datasetName, group_identifier=group_identifier, classifier=classifier, bandwith_approch=bandwith_approch, verbose=verbose,\
                 group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_distance_calculation=skip_distance_calculation,\
                 skip_graph_creation=skip_graph_creation, representation=representation, skip_bandwith_calculation=skip_bandwith_calculation)
-    
-    fgce_init_dict = {"fgce": fgce, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
+    fgce_init_dict = {"facegroup": facegroup, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
          "attr_col_mapping": attr_col_mapping, "normalized_group_identifer_value": normalized_group_identifer_value, "numeric_columns": numeric_columns,\
-         "positive_points": positive_points, "FN": FN, "FN_negatives_by_group": FN_negatives_by_group, "node_connectivity": node_connectivity,\
+         "candidate_counterfactuals": candidate_counterfactuals, "Factuals": Factuals, "Factuals_by_group": Factuals_by_group, "node_connectivity": node_connectivity,\
               "edge_connectivity": edge_connectivity, "feasibility_constraints": feasibility_constraints}
     
      
@@ -244,10 +245,12 @@ def cAUC(datasetName="Student", epsilon=0.5, group_identifier='sex', group_ident
 
         for idx, k in enumerate(k_values):
             
-            results_per_group, max_cost = main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=3, datasetName='Student', 
-					group_identifier='sex', classifier="lr", bandwith_approch="mean_scotts_rule", k=k, cost_function = "max_vector_distance",
-					group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_distance_calculation=skip_distance_calculation, skip_graph_creation=skip_graph_creation,
-					skip_fgce_calculation=skip_fgce_calculation,  skip_bandwith_calculation=skip_bandwith_calculation, cov_constr_approach="global", cov = coverage,  representation=64, fgce_init_dict=fgce_init_dict, alg='MIP')
+            results_per_group, max_cost = main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=epsilon, datasetName=datasetName, 
+					group_identifier=group_identifier, classifier=classifier, bandwith_approch=bandwith_approch, k=k, cost_function=cost_function,\
+					group_identifier_value=group_identifier_value, skip_model_training=skip_model_training,\
+                    skip_distance_calculation=skip_distance_calculation, skip_graph_creation=skip_graph_creation,
+					skip_FACEGroup_calculation=skip_FACEGroup_calculation,  skip_bandwith_calculation=skip_bandwith_calculation,\
+                    cov_constr_approach=cov_constr_approach, cov = coverage,  representation=representation, fgce_init_dict=fgce_init_dict, alg=alg)
             
             group_keys = list(results_per_group.keys())
             
@@ -264,20 +267,21 @@ def cAUC(datasetName="Student", epsilon=0.5, group_identifier='sex', group_ident
         saturation_points[coverage]["group_0"], cost_for_saturation_points[coverage]["group_0"] = find_saturation_point(total_cost_group_0, k_values)
         saturation_points[coverage]["group_1"], cost_for_saturation_points[coverage]["group_1"] = find_saturation_point(total_cost_group_1, k_values)
 
-        plt.plot(k_values, total_cost_group_0, marker='o', color='red', label='Group 0')
-        plt.plot(k_values, total_cost_group_1, marker='s', color='green', label='Group 1')
-        plt.xlabel('k', fontsize=12, fontfamily='serif')
-        plt.ylabel('Max cost', fontsize=12, fontfamily='serif')
-        plt.text(0.8, 0.2, f'AUC Group 0: {AUC_group_0:.2f}', fontsize=10, ha='center', transform=plt.gca().transAxes)
-        plt.text(0.8, 0.15, f'AUC Group 1: {AUC_group_1:.2f}', fontsize=10, ha='center', transform=plt.gca().transAxes)
-        
-        plt.xticks(k_values)  
-        plt.legend()
-        plt.tight_layout()
-        fig_size = (8, 6) 
-        plt.gcf().set_size_inches(fig_size)
-        plt.savefig(f'max_distance_for_different_values_of_k_{datasetName}_coverage={coverage}.pdf')
-        plt.show()
+        if plot_:
+            plt.plot(k_values, total_cost_group_0, marker='o', color='red', label='Group 0')
+            plt.plot(k_values, total_cost_group_1, marker='s', color='green', label='Group 1')
+            plt.xlabel('k', fontsize=12, fontfamily='serif')
+            plt.ylabel('Max cost', fontsize=12, fontfamily='serif')
+            plt.text(0.8, 0.2, f'AUC Group 0: {AUC_group_0:.2f}', fontsize=10, ha='center', transform=plt.gca().transAxes)
+            plt.text(0.8, 0.15, f'AUC Group 1: {AUC_group_1:.2f}', fontsize=10, ha='center', transform=plt.gca().transAxes)
+            
+            plt.xticks(k_values)
+            plt.legend()
+            plt.tight_layout()
+            fig_size = (8, 6) 
+            plt.gcf().set_size_inches(fig_size)
+            plt.savefig(f'max_distance_for_different_values_of_k_{datasetName}_coverage={coverage}.pdf')
+            plt.show()
 
 def plot_k_or_dAUC(datasetName, saturation_points, cov_for_saturation_points, auc_matrix, score='k',\
         expand_left_x_axis=0, expand_right_x_axis=1, expand_bottom_y_axis=0.5, expand_top_y_axis=0.5):
@@ -551,7 +555,7 @@ def plot_feature_frequency(dataset_name, action_frequency_g0, action_frequency_g
     plt.show()
 
 def plot_feature_frequency_per_wcc(datasetName, action_frequency_g0, action_frequency_g1, sx, sy, params_size, freq_threshold=None):
-    plt.style.use('seaborn-muted')
+    # plt.style.use('seaborn-muted')
     plt.rcParams.update({"font.family": "serif"})
 
     sorted_action_frequency_g0 = dict(sorted(action_frequency_g0.items()))

@@ -202,9 +202,8 @@ def initialize_FACEGroup_attributes(datasetName='Student', skip_bandwith_calcula
 
     return data, data_np, X, FEATURE_COLUMNS, TARGET_COLUMNS, kernel, model
 
-def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method, max_d, k_values, x_size, y_size, tick_params_size, 
-              ax1_ylabel=True, ax2_ylabel=True, legend_inside=True, legend_fontsize=16, loc="best"):
-    
+def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method, max_d, k_values, x_size, y_size, tick_params_size,
+              ax1_ylabel=True, ax2_ylabel=True, legend_inside=True, legend_fontsize=16, loc="best", round_precision_wij=3, round_precision_v=2):
     plt.style.use('seaborn-muted')
     plt.rcParams.update({
         "font.family": "serif",
@@ -228,23 +227,28 @@ def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method,
     # First axis
     ax1.plot(x_values, face_wij, '--o', color=color_face_wij, label="Face Wij Cost", markersize=8, alpha=0.9, linewidth=4)
     ax1.plot(x_values_offset, gfce_wij, '--o', color=color_gfce_wij, label="FACEGroup Wij Cost", markersize=8, alpha=0.9, linewidth=4)
-    
+
     if ax1_ylabel:
         ax1.set_ylabel("Avg Wij Cost", fontsize=tick_params_size)
-    
+
     ax1.set_xticks(x_values)
     ax1.set_xticklabels([int(k) for k in k_values])
     ax1.set_xlabel("k", fontsize=tick_params_size)
-    ax1.set_yscale('log')
-    ax1.set_ylim([min(min(face_wij), min(gfce_wij)) * 0.9, max(max(face_wij), max(gfce_wij)) * 1.1])
+    y1_min = min(min(face_wij), min(gfce_wij))
+    y1_max = max(max(face_wij), max(gfce_wij))
+    y1ticks_raw = nice_numbers(y1_min, y1_max, 4, score='d', round_precision=round_precision_wij)
+    ax1.set_yticks(y1ticks_raw)
 
     ax2 = ax1.twinx()
     ax2.plot(x_values, face_dists, '-o', color=color_face_dists, label="Face Vector Costs", markersize=8, alpha=0.9, linewidth=4)
     ax2.plot(x_values_offset, gfce_dists, '-o', color=color_gfce_dists, label="FACEGroup Vector Costs", markersize=8, alpha=0.9, linewidth=4)
-    
     if ax2_ylabel:
         ax2.set_ylabel("Avg Vector Cost", fontsize=tick_params_size)
 
+    y2_min = min(min(face_dists), min(gfce_dists))
+    y2_max = max(max(face_dists), max(gfce_dists))
+    y2ticks_raw = nice_numbers(y2_min, y2_max, 4, score='d', round_precision=round_precision_v)
+    ax2.set_yticks(y2ticks_raw)
     if legend_inside:
         handles1, labels1 = ax1.get_legend_handles_labels()
         handles2, labels2 = ax2.get_legend_handles_labels()
@@ -266,15 +270,15 @@ def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method,
         gfce_dists_line = Line2D([0, 1], [0, 0], linestyle='-', marker='o', color=color_gfce_dists, markersize=8, linewidth=4, label="FACEGroup Vector Costs")
 
         ax_legend.legend([face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line], 
-                         [line.get_label() for line in [face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line]], 
-                         loc='center', fontsize=legend_fontsize, frameon=False)
+                            [line.get_label() for line in [face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line]], 
+                            loc='center', fontsize=legend_fontsize, frameon=False)
         ax_legend.axis('off')
 
         fig_legend.savefig(f"{FACEGroup_DIR}/tmp/{datasetName}/figs/{datasetName}_legend.pdf",
-                           bbox_inches='tight', dpi=300)
+                            bbox_inches='tight', dpi=300)
     plt.show()
 
-def nice_numbers(range_min, range_max, num_ticks, score='k'):
+def nice_numbers(range_min, range_max, num_ticks, score='k', round_precision=2):
     """
     Generate "nice" numbers for a given range.
 
@@ -324,7 +328,6 @@ def nice_numbers(range_min, range_max, num_ticks, score='k'):
         ticks = ticks.astype(int)
 
     elif score == 'd':
-        # nice_options = [1, 2, 3, 4, 5, 10]
         nice_options = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         for option in nice_options:
             if fraction <= option:
@@ -334,8 +337,7 @@ def nice_numbers(range_min, range_max, num_ticks, score='k'):
         if range_min + (num_ticks - 1) * nice_tick_spacing < range_max:
             nice_tick_spacing = (range_max - range_min) / (num_ticks - 1)
         ticks = range_min + np.arange(num_ticks)*nice_tick_spacing
-        ticks = np.round(ticks, 2)
-
+        ticks = np.round(ticks, round_precision)
     return ticks
 
 def face_comparison(datasetName="Student", epsilon=3, bandwith_approch="mean_scotts_rule", classifier="xgb",\
@@ -347,14 +349,14 @@ def face_comparison(datasetName="Student", epsilon=3, bandwith_approch="mean_sco
     gfce_dists = []
     gfce_wij = []
 
-    facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
-                FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon=epsilon,\
+    facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, candidate_counterfactuals,\
+                Factuals, Factuals_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon=epsilon,\
                     datasetName=datasetName, group_identifier=group_identifier, classifier=classifier, bandwith_approch=bandwith_approch,\
                     group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_bandwith_calculation=skip_bandwith_calculation,\
                     skip_graph_creation=skip_graph_creation, skip_distance_calculation=skip_distance_calculation, representation=representation)
     fgce_init_dict = {"facegroup": facegroup, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
             "attr_col_mapping": attr_col_mapping, "normalized_group_identifer_value": normalized_group_identifer_value, "numeric_columns": numeric_columns,\
-            "positive_points": positive_points, "FN": FN, "FN_negatives_by_group": FN_negatives_by_group, "node_connectivity": node_connectivity,\
+            "candidate_counterfactuals": candidate_counterfactuals, "Factuals": Factuals, "Factuals_by_group": Factuals_by_group, "node_connectivity": node_connectivity,\
                 "edge_connectivity": edge_connectivity, "feasibility_constraints": feasibility_constraints}
 
     k_values = nice_numbers(1, upper_limit_for_k, steps, score='k')
@@ -383,8 +385,8 @@ def get_graph_stats(epsilon=0.4,\
         datasetName='Adult', group_identifier='sex', group_identifier_value=None, bandwith_approch="mean_scotts_rule", classifier='xgb',\
 		skip_model_training=True, skip_distance_calculation=True, skip_graph_creation=True, skip_bandwith_calculation=True, verbose=False):
   
-  facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, positive_points,\
-    FN, FN_negatives_by_group, node_connectivity, edge_connectivity, feasibility_constraints = initialize_FACEGroup(epsilon=epsilon,\
+  facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, candidate_counterfactuals,\
+                Factuals, Factuals_by_group, node_connectivity, edge_connectivity, feasibility_constraints = initialize_FACEGroup(epsilon=epsilon,\
     datasetName=datasetName, group_identifier=group_identifier, bandwith_approch=bandwith_approch, classifier=classifier,\
     group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_distance_calculation=skip_distance_calculation,\
     skip_graph_creation=skip_graph_creation, skip_bandwith_calculation=skip_bandwith_calculation, verbose=verbose)
@@ -403,3 +405,221 @@ def get_graph_stats(epsilon=0.4,\
     stats[group] = {'num_nodes': len(subgroup_nodes[group]), 'num_strongly_connected_components': len(strongly_connected_components),
             'num_weakly_connected_components': len(weakly_connected_components[group]), 'density': f'{density*100:.2f}'}
   return stats
+
+def mip_to_greedy_comparison(epsilon=3, datasetName='Student',
+                    group_identifier='sex', classifier="xgb", bandwith_approch="mean_scotts_rule",
+                    k_range=None, k_lower=1, k_upper=10, max_d=3.61, cost_function="max_vector_distance", 
+                    k_selection_method="accross_all_ccs", group_identifier_value=None, 
+                    skip_model_training=True, skip_distance_calculation=True, skip_graph_creation=True, 
+                    skip_bandwith_calculation=True, skip_FACEGroup_calculation=False, 
+                    representation=64, fgce_init_dict=None, 
+                    verbose=False, mip_runs=5):
+    if os.path.exists(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}Mip_greedy_comparison{sep}{str(k_range)}_{max_d}_mipruns{mip_runs}.pkl"):
+        with open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}Mip_greedy_comparison{sep}{str(k_range)}_{max_d}_mipruns{mip_runs}.pkl", "rb") as f:
+            all_results = pickle.load(f)
+        return all_results['results'], all_results['mips_time'], all_results['greedy_time'], all_results['total_coverage_mip'], all_results['total_coverage_greedy']
+
+    facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, candidate_counterfactuals,\
+			  Factuals, Factuals_by_group, node_connectivity, edge_connectivity, feasibility_constraints  = initialize_FACEGroup(epsilon,\
+                datasetName=datasetName, group_identifier=group_identifier, classifier=classifier, bandwith_approch=bandwith_approch, verbose=verbose,\
+                group_identifier_value=group_identifier_value, skip_model_training=skip_model_training, skip_distance_calculation=skip_distance_calculation,\
+                skip_graph_creation=skip_graph_creation, representation=representation, skip_bandwith_calculation=skip_bandwith_calculation)
+
+    fgce_init_dict = {"facegroup": facegroup, "graph": graph, "distances": distances, "data": data, "data_np": data_np, "data_df_copy": data_df_copy,\
+         "attr_col_mapping": attr_col_mapping, "normalized_group_identifer_value": normalized_group_identifer_value, "numeric_columns": numeric_columns,\
+         "candidate_counterfactuals": candidate_counterfactuals, "Factuals": Factuals, "Factuals_by_group": Factuals_by_group, "node_connectivity": node_connectivity,\
+              "edge_connectivity": edge_connectivity, "feasibility_constraints": feasibility_constraints}
+
+    group_ids = []
+    mips_time = {}
+    mips_total_coverage = {}
+    greedy_time = {}
+    greedy_total_coverage = {}
+    results = {}
+
+    if k_range is None:
+        k_range = range(k_lower, k_upper + 1)
+
+    for k in tqdm(k_range, desc=f"Comparing MIP and Greedy selection for k: {k_range}"):
+        # Storage for multiple MIP runs
+        mip_coverage_per_group = {}
+        mip_avg_cost_per_group = {}
+        mip_cfes_count_per_group = {}
+        mip_total_coverage = []
+        mip_exec_times = []
+
+        ## Run MIP multiple times and collect statistics
+        for _ in range(mip_runs):
+            mip_res = main_cost_constrained_GCFEs(
+                epsilon=epsilon, datasetName=datasetName, group_identifier=group_identifier,
+                group_identifier_value=group_identifier_value, skip_model_training=skip_model_training,
+                skip_FACEGroup_calculation=skip_FACEGroup_calculation, skip_graph_creation=skip_graph_creation,
+                max_d=max_d, cost_function=cost_function, k=k,
+                k_selection_method=k_selection_method, fgce_init_dict=fgce_init_dict, cfe_selection_method="mip"
+            )[0]
+
+            mip_total_coverage.append(mip_res['Total coverage'])
+            mip_exec_times.append(mip_res['Time'])
+
+            # Process per-group statistics
+            for group_id in mip_res:
+                if group_id in ["Node Connectivity", "Edge Connectivity", "Total coverage", "Graph Stats", "Time"]:
+                    continue
+
+                # Initialize if first run
+                if group_id not in mip_coverage_per_group:
+                    mip_coverage_per_group[group_id] = []
+                    mip_avg_cost_per_group[group_id] = []
+                    mip_cfes_count_per_group[group_id] = []
+
+                mip_coverage_per_group[group_id].append(mip_res[group_id]['Coverage'])
+                mip_avg_cost_per_group[group_id].append(mip_res[group_id]['Avg. distance'])
+
+                # Compute unique CFEs per group
+                mip_group_cfes = set()
+                for factual in mip_res[group_id]:
+                    if factual in ["Coverage", "Avg. distance", "Median distance", "Avg. path cost", "Median path cost"]:
+                        continue
+                    mip_group_cfes.add(mip_res[group_id][factual]['CFE_name'])
+                mip_cfes_count_per_group[group_id].append(len(mip_group_cfes))
+
+        # Compute averages
+        avg_mip_exec_time = np.mean(mip_exec_times)
+        avg_mip_total_coverage = np.mean(mip_total_coverage)
+
+        # Run Greedy once
+        greedy_res = main_cost_constrained_GCFEs(
+            epsilon=epsilon, datasetName=datasetName, group_identifier=group_identifier,
+            group_identifier_value=group_identifier_value, skip_model_training=skip_model_training,
+            skip_FACEGroup_calculation=skip_FACEGroup_calculation, skip_graph_creation=skip_graph_creation,
+            max_d=max_d, cost_function=cost_function, k=k,
+            k_selection_method=k_selection_method, fgce_init_dict=fgce_init_dict, cfe_selection_method="greedy"
+        )[0]
+
+        # Compute number of CFEs for Greedy
+        greedy_cfes_count_per_group = {}
+        for group_id in greedy_res:
+            if group_id in ["Node Connectivity", "Edge Connectivity", "Total coverage", "Graph Stats", "Time"]:
+                continue
+
+            greedy_group_cfes = set()
+            for factual in greedy_res[group_id]:
+                if factual in ["Coverage", "Avg. distance", "Median distance", "Avg. path cost", "Median path cost"]:
+                    continue
+                greedy_group_cfes.add(greedy_res[group_id][factual]['CFE_name'])
+            greedy_cfes_count_per_group[group_id] = len(greedy_group_cfes)
+
+        # Collect group IDs (only in first iteration)
+        if not group_ids:
+            for group_id in mip_res.keys():
+                if group_id in ["Node Connectivity", "Edge Connectivity", "Total coverage", "Graph Stats", "Time"]:
+                    continue
+                group_ids.append(group_id)
+
+        # Store results per group and per k
+        for group_id in group_ids:
+            if group_id not in results:
+                results[group_id] = {}
+
+            results[group_id][k] = {
+                'coverage_mip': np.mean(mip_coverage_per_group[group_id]),
+                'avg_cost_mip': np.mean(mip_avg_cost_per_group[group_id]),
+                'num_cfes_mip': np.mean(mip_cfes_count_per_group[group_id]),  # Avg CFEs per group in MIP
+                'coverage_greedy': greedy_res[group_id]['Coverage'],
+                'avg_cost_greedy': greedy_res[group_id]['Avg. distance'],
+                'num_cfes_greedy': greedy_cfes_count_per_group[group_id]  # CFEs per group in Greedy
+            }
+
+        mips_time[k] = avg_mip_exec_time
+        mips_total_coverage[k] = avg_mip_total_coverage
+        greedy_time[k] = greedy_res['Time']
+        greedy_total_coverage[k] = greedy_res['Total coverage']
+    
+    all_results = {"results": results, "mips_time": mips_time, "greedy_time": greedy_time, "total_coverage_mip": mips_total_coverage, "total_coverage_greedy": greedy_total_coverage}
+    if not os.path.exists(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}Mip_greedy_comparison{sep}"):
+        os.makedirs(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}Mip_greedy_comparison{sep}")
+    with open(f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}Mip_greedy_comparison{sep}{str(k_range)}_{max_d}_mipruns{mip_runs}.pkl", "wb") as f:
+        pickle.dump(all_results, f)
+
+    return results, mips_time, greedy_time, mips_total_coverage, greedy_total_coverage
+
+def mip_vs_greedy_plot(datasetName="Student", results=None, mips_time=None, greedy_time=None,
+                        mips_total_coverage=None, greedy_total_coverage=None, k_lower=1, k_upper=10, k_range=None, max_d=3):
+    plt.style.use('seaborn-muted')
+    plt.rcParams.update({
+        "font.family": "serif",
+        "axes.titlesize": 18,
+        "axes.labelsize": 18,
+        "xtick.labelsize": 16,
+        "ytick.labelsize": 16,
+        "legend.fontsize": 16
+    })
+
+    group_ids = list(results.keys())
+    if k_range is None:
+        k_values = list(range(k_lower, k_upper + 1))
+    else:
+        k_values = k_range
+
+    # color_mip = '#CC6677'  
+    # color_greedy = '#882255'
+
+    color_mip = '#CC6677'  
+    color_greedy = '#4C72B0'  
+
+    save_path = f"{FACEGroup_DIR}{sep}tmp{sep}{datasetName}{sep}figs{sep}/greedy_vs_mip/"
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    ### 1. Total Coverage Plot ###
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(k_values, mips_total_coverage.values(), label='MIP', linestyle='-', marker='o', color=color_mip, linewidth=2, markersize=6)
+    ax.plot(k_values, greedy_total_coverage.values(), label='Greedy', linestyle='-', marker='x', color=color_greedy, linewidth=2, markersize=6)
+    ax.set_xticks(k_values)
+    ax.set_xlabel("k", fontsize=18)
+    ax.set_ylabel("Coverage", fontsize=18)
+    plt.tight_layout()
+    ax.legend(loc='best', frameon=False, fontsize=15)
+    plt.savefig(f"{save_path}total_coverage_{max_d}.pdf", bbox_inches='tight', dpi=300)
+    plt.show()
+
+    ### 2. Coverage per Group ###
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for group_id in group_ids:
+        linestyle = '-' if group_id == '0.0' else '--'
+        ax.plot(k_values, [results[group_id][k]['coverage_mip'] for k in k_values], label=f'MIP Group {group_id}', linestyle=linestyle, marker='o', color=color_mip, linewidth=2, markersize=6)
+        ax.plot(k_values, [results[group_id][k]['coverage_greedy'] for k in k_values], label=f'Greedy Group {group_id}', linestyle=linestyle, marker='x', color=color_greedy, linewidth=2, markersize=6)
+    ax.set_xticks(k_values)
+    ax.set_xlabel("k", fontsize=18)
+    ax.set_ylabel("Coverage", fontsize=18)
+    plt.tight_layout()
+    ax.legend(loc='best', frameon=False, fontsize=15)
+    plt.savefig(f"{save_path}coverage_{max_d}.pdf", bbox_inches='tight', dpi=300)
+    plt.show()
+
+    ### 3. Time Plot ###
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(k_values, [mips_time[k] for k in k_values], label='MIP', linestyle='-', marker='o', color=color_mip, linewidth=2, markersize=6)
+    ax.plot(k_values, [greedy_time[k] for k in k_values], label='Greedy', linestyle='-', marker='x', color=color_greedy, linewidth=2, markersize=6)
+    ax.set_xticks(k_values)
+    ax.set_xlabel("k", fontsize=18)
+    ax.set_ylabel("Time (s)", fontsize=18)
+    ax.set_yscale('log')
+    plt.tight_layout()
+    ax.legend(loc='best', frameon=False, fontsize=15)
+    plt.savefig(f"{save_path}time_{max_d}.pdf", bbox_inches='tight', dpi=300)
+    plt.show()
+
+    ### 4. CFEs Count ###
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for group_id in group_ids:
+        linestyle = '-' if group_id == '0.0' else '--'
+        ax.plot(k_values, [results[group_id][k]['num_cfes_mip'] for k in k_values], label=f'MIP Group {group_id}', linestyle=linestyle, marker='o', color=color_mip, linewidth=2, markersize=6)
+        ax.plot(k_values, [results[group_id][k]['num_cfes_greedy'] for k in k_values], label=f'Greedy Group {group_id}', linestyle=linestyle, marker='x', color=color_greedy, linewidth=2, markersize=6)
+    ax.set_xticks(k_values)
+    ax.set_xlabel("k", fontsize=18)
+    ax.set_ylabel("CFEs Count", fontsize=18)
+    ax.legend(loc='best', frameon=False, fontsize=15)
+    plt.tight_layout()
+    plt.savefig(f"{save_path}cfes_count_{max_d}.pdf", bbox_inches='tight', dpi=300)
+    plt.show()

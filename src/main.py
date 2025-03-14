@@ -803,7 +803,7 @@ def main_coverage_constrained_GCFEs(epsilon=0.2, datasetName='Student', group_id
 def main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=3, datasetName='Student', 
 					group_identifier='sex', classifier="lr", bandwith_approch="mean_scotts_rule", k=5, cost_function = "max_vector_distance",
 					group_identifier_value=None, skip_model_training=True, skip_distance_calculation=True, skip_graph_creation=True,
-					skip_fgce_calculation=False,  skip_bandwith_calculation=True, cov_constr_approach="local", cov = 1,  representation=64, fgce_init_dict=None, alg='MIP'):
+					skip_FACEGroup_calculation=False,  skip_bandwith_calculation=True, cov_constr_approach="local", cov = 1,  representation=64, fgce_init_dict=None, alg='MIP'):
 	"""
 	This function is used to solve the coverage-constrained group counterfactuals problem using binary search
 
@@ -830,7 +830,7 @@ def main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=3, datasetName='Student',
 		if it will skip the graph creation and load it if it exists or not
 	- skip_bandwith_calculation: (boolean)
 		if it will skip the bandwith calculation and load it if it exists or not
-	- skip_fgce_calculation: (boolean)
+	- skip_FACEGroup_calculation: (boolean)
 		if it will skip the group cfes calculation and load it if it exists or not
 	- cov_constr_approach: (str)
 		the approach to use for the coverage constraint
@@ -839,7 +839,7 @@ def main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=3, datasetName='Student',
 	# Returns:
 	----------------
 	- results: (dict)
-		dictionary containing the final results of the FGCE-Group algorithm
+		dictionary containing the final results of the FACEGroup algorithm
 	"""
 	if fgce_init_dict:
 		facegroup, graph, distances, data, data_np, data_df_copy, attr_col_mapping, normalized_group_identifer_value, numeric_columns, candidate_counterfactuals,\
@@ -862,7 +862,7 @@ def main_coverage_constrained_GCFEs_Greedy_MIP(epsilon=3, datasetName='Student',
 	os.makedirs(os.path.dirname(file_path), exist_ok=True)
 	os.makedirs(os.path.dirname(gcfes_path), exist_ok=True)
 
-	if skip_fgce_calculation and os.path.exists(file_path):
+	if skip_FACEGroup_calculation and os.path.exists(file_path):
 		results = json.load(open(file_path, "r"))
 		return results
 	else:
