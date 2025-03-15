@@ -25,9 +25,8 @@ class GLOBE_CE():
         """
         # Params
         self.x_dim = X.shape[1]  # dimensionality of inputs
-       
         self.p = p
-        
+
         # Model + Dataset + Cuda
         self.model = model
         self.dataset = copy.deepcopy(dataset)
@@ -36,12 +35,9 @@ class GLOBE_CE():
         self.name = self.dataset.name
         self.monotonicity = np.array(monotonicity) if monotonicity is not None else None
         self.features = np.array(list(self.dataset.features_tree))
-       
-        
-        
         self.n_f = len(self.features)
         self.feature_values = self.dataset.features[:-1]
-       
+
         # Refer normalisation to model?
         if normalise is not None:
             self.normalise = True
@@ -50,23 +46,16 @@ class GLOBE_CE():
             self.preds = self.model.predict((self.X.values-self.means)/self.stds)
         else:
             self.normalise = False
-      
             self.preds = self.model.predict(X.values)  # to determine affected inputs
 
-            
-        
         # X
         self.x_aff = copy.deepcopy(self.X.values)
-       
         self.x_aff = self.x_aff[self.preds == 0]
-        #self.x_aff = FN
-      
-       
         if self.affected_subgroup is not None:
             self.subgroup_idx = self.x_aff[self.affected_subgroup] == 1
             self.x_aff = self.x_aff[self.subgroup_idx]
         self.n = self.x_aff.shape[0]  # number of affected inputs
-        
+
         # Feature processing
         self.dropped_features = dropped_features
         self.active_idx = np.ones(len(self.feature_values), dtype=bool)
@@ -82,7 +71,7 @@ class GLOBE_CE():
                     self.active_idx[i] = False
                     self.active_f_idx[f_i] = False
         self.sample_idx = np.arange(self.n_f)[self.active_f_idx]  # for random sampling
-        
+
         # Store Features. Generate l1 feature costs (need to differentiate
         # between categorical/continuous)
         # Continuous/categorical/non-dropped features are all computed/stored
@@ -91,19 +80,23 @@ class GLOBE_CE():
         # Note that many variables are useful in debugging (can inspect
         # instance.variable from Jupyter)
         self.features_tree = self.dataset.features_tree  # dictionary of form 'feature: [feature values]'
-        
         # list of categorical features (not values)
         self.categorical_features = self.dataset.categorical_features[self.name]
         # list of continuous features
         self.continuous_features = self.dataset.continuous_features[self.name]
         # Number of categorical or continuous features
         self.n_categorical = len(self.categorical_features)
+        print(self.continuous_features)
         self.n_continuous = len(self.continuous_features)
+        
         for feature in self.dropped_features:
-            if feature in self.categorical_features:
+            feature_name = feature.split(" =")[0] 
+            if feature_name in self.categorical_features:
                 self.n_categorical -= 1
             else:
                 self.n_continuous -= 1
+
+        print(self.n_continuous)
         # Compute Costs Mask
         self.ordinal_features = ordinal_features
         self.feature_costs_vector = np.zeros(len(self.feature_values))
@@ -111,14 +104,11 @@ class GLOBE_CE():
         self.bin_widths = bin_widths
         # Mask to clamp categorical variables (this is yet to be tested)
         self.categorical_idx = np.zeros(len(self.feature_values), dtype=bool)
-        
         # Costs Masks and Feature Idx to Values Indexes Dictionary
         i = 0
         self.features_tree_idx = {}
-      
         for j, feature in enumerate(self.features_tree):
             if feature in self.continuous_features:
-              
                 if self.bin_widths is not None:
                     # includes dropped features
                     self.feature_costs_vector[i] = 1/self.bin_widths[feature]
@@ -128,24 +118,19 @@ class GLOBE_CE():
                 self.features_tree_idx[j] = [i]
                 i += 1
             else:
-                
                 n = len(self.features_tree[feature])
                 if feature in self.ordinal_features:
                     # default (for now) to unit change between bins
                     self.feature_costs_vector[i:i+n] = np.arange(n)
                     self.non_ordinal_categories_idx[i:i+n] = False
                 else:
-                    
                     # categorical features have cost 1 (2 changes of 0.5)
                     self.feature_costs_vector[i:i+n] = 0.5
                     self.non_ordinal_categories_idx[i:i+n] = True
                 self.categorical_idx[i:i+n] = True
                 self.features_tree_idx[j] = list(range(i, i+n))
-
                 i += n
-        
         self.continuous_idx = ~self.categorical_idx
-       
         # either we bin continuous features before model training (ordinal categories)
         # or we don't (non-ordinal categories)
         self.ordinal_categories_idx = ~self.non_ordinal_categories_idx
@@ -178,14 +163,12 @@ class GLOBE_CE():
         """
         ret = np.zeros(cf.shape)
         i = 0
-    
         for feature in self.features:  # requires list to maintain correct order
             if not self.features_tree[feature]:
                 ret[:, i] = cf[:, i]
                 i += 1
             else:
                 n = len(self.features_tree[feature])
-                
                 ret[np.arange(ret.shape[0]), i+np.argmax(cf[:, i:i+n], axis=1)] = 1
                 i += n
         return ret
@@ -201,7 +184,7 @@ class GLOBE_CE():
             # sum(abs(diff)) also applies to continuous features
             ret += np.linalg.norm(x_diff[:, self.non_ordinal_categories_idx]*
                                   self.feature_costs_vector[self.non_ordinal_categories_idx],
-                                  axis=1, ord=2)
+                                  axis=1, ord=1)
         if self.any_ordinal:
             # e.g. abs(sum([1, -3])) going from 3rd bin to 1st bin has cost 2
             ret += np.abs((x_diff[:, self.ordinal_categories_idx]*
@@ -227,8 +210,6 @@ class GLOBE_CE():
         # Evaluate CEs
         cost = np.zeros(x_aff.shape[0])
         ces = self.round_categorical(x_aff+delta) if self.n_categorical else x_aff+delta
-        
-
         if self.normalise:
             correct = self.model.predict((ces-self.means)/self.stds)
         else:
@@ -368,12 +349,11 @@ class GLOBE_CE():
             x_aff = self.x_aff
 
         self.scalars = scalars
-      
         # Compute scalars
         if type(scalars) == str and scalars == 'auto':
             max_scalar = max(self.bisection(delta), 1)
             self.scalars = np.linspace(0, max_scalar, n_scalars)
-         
+            
         # Evaluate scaled delta
         n_scalars = len(self.scalars)
         if vector:
@@ -383,21 +363,15 @@ class GLOBE_CE():
             corrects = np.zeros(n_scalars)
             costs = np.zeros(n_scalars)
 
-        corerects_dict = {} 
-        costs_dict = {} 
-
         for i, scalar in enumerate(tqdm(self.scalars,
                                         disable=disable_tqdm)):
-            if ~np.isnan(scalar):                                       
+            if ~np.isnan(scalar):
                 corrects[i], costs[i] =\
                     self.evaluate(scalar * delta + eps, vector=vector,
                                   none_type=none_type, x_aff=x_aff,
                                   non_zero_costs=non_zero_costs)
-                corerects_dict[scalar], costs_dict[scalar] =\
-                    self.evaluate(scalar * delta + eps, vector=vector,
-                                  none_type=none_type, x_aff=x_aff,
-                                  non_zero_costs=non_zero_costs)
-        return corrects, costs, self.scalars, corerects_dict, costs_dict
+
+        return corrects, costs, self.scalars
 
     def bisection(self, delta, thresh=99.9, iters=200, b_lim=100):
         """Returns the maximum scalar for which the coverage is above thresh"""
@@ -406,13 +380,9 @@ class GLOBE_CE():
         b = 1  # initial upper interval
         max_acc = 0  # maximum coverage
         max_b = 1  # upper interval at maximum coverage
-
-        # Calculate the modified features with the current scalar value
         ces = self.round_categorical(self.x_aff+delta*b)
         if self.normalise:
             ces = (ces-self.means)/self.stds
-
-        # Calculate the prediction coverage with the modified features
         pred = self.model.predict(ces).mean()*100
         while pred < thresh and b<b_lim:
             if pred > max_acc:
@@ -502,7 +472,6 @@ class GLOBE_CE():
                     scalar_idx = int(scalar_idx)
                     costs[scalar_idx] = self.evaluate(delta*(scalars[scalar_idx]+eps),
                                                       x_aff=x_aff, vector=True)[1]
-        
         max_scalar_costs = np.zeros(x_aff.shape[0])
         max_scalar_costs[:] = np.inf
         costs_c = np.zeros(max_scalar_idxs.shape[0])
@@ -510,6 +479,7 @@ class GLOBE_CE():
         cor, avg_cost = 0, 0
         last_rules = {}
         for i, scalar_idx in enumerate(max_scalar_idxs):
+            #print(i)
             if scalar_idx!=np.inf:
                 scalar_idx = int(scalar_idx)
                 scalar_cost = costs[scalar_idx].copy()
@@ -570,7 +540,6 @@ class GLOBE_CE():
     
     def min_scalar_costs(self, costs, return_idxs=True,
                          remove_nan=False, inf=False):
-   
         min_costs = np.zeros(costs.shape[1])  # |X_aff|
         min_costs_idxs = np.zeros(costs.shape[1])
         min_costs_idxs[:] = np.nan
@@ -588,11 +557,10 @@ class GLOBE_CE():
         if inf:
             min_costs[min_costs == 0] = np.inf
         if return_idxs:
-           
             return min_costs, min_costs_idxs
         else:
             return min_costs
-        
+    
     @staticmethod
     def accuracy_cost_bounds(min_costs):
         n = min_costs.shape[0]
@@ -607,8 +575,6 @@ class GLOBE_CE():
         return costs, corrects
     
     def select_n_deltas(self, n_div, plot=False):
-        import time
-        start_time = time.time()
         cors, coss, deltas = self.correct_matrix, self.cost_matrix, self.deltas
 
         # Get n diverse deltas (maximum coverage)
@@ -622,20 +588,17 @@ class GLOBE_CE():
                     c_max, j_max = c_j.mean(), j
             c = np.maximum(c, cors[j_max])
             self.deltas_div[i] = deltas[j_max]
-        end_time = time.time()
-        elapsed_time_best_deltas = end_time - start_time
-        print("Time taken to find n=3 best deltas:", elapsed_time_best_deltas, "seconds")
 
     def sample(self, n_sample, magnitude=1, sparsity_power=1, idxs=None,
                n_features=None, disable_tqdm=False, plot=False,
                seed=None, scheme='random', dropped_features=[]):
-        
         n, x_dim = self.x_aff.shape
         if idxs is not None:
             n = idxs.sum()
         self.correct_matrix = np.zeros((n_sample, n))
         self.cost_matrix = np.zeros((n_sample, n))
         self.deltas = np.zeros((n_sample, x_dim))
+         
         inactive = np.array([self.feature_values.index(i)
                              for i in dropped_features])
         self.correct_vector, self.cost_vector =\
@@ -647,15 +610,14 @@ class GLOBE_CE():
         if seed is not None:
             np.random.seed(seed)
         
-        for i in tqdm(range(n_sample), disable=disable_tqdm):  #for every sample
+        for i in tqdm(range(n_sample), disable=disable_tqdm):
             self.deltas[i] = self.schemes(scheme, magnitude,
                                           sparsity_power, n_features)
-             
             if inactive.any():
                 self.deltas[i, inactive] = 0
             self.correct_matrix[i], self.cost_matrix[i] =\
                 self.evaluate(self.deltas[i], vector=True, idxs=idxs)
-            
+
             if self.correct_matrix[i].any():
                 cos_idx = self.cost_matrix[i] != 0
                 cor, cos = self.correct_matrix[i].mean(),\
@@ -667,8 +629,7 @@ class GLOBE_CE():
                 cor, cos = 0, 0
             self.correct_vector[i], self.cost_vector[i] = cor, cos
             self.correct_max[i], self.cost_max[i] = cor_max, cos_max
-            
-
+        
         if plot:
             fig, ax = plt.subplots(nrows=1, ncols=3, dpi=200)
             fig.set_figwidth(11)
@@ -716,20 +677,17 @@ class GLOBE_CE():
         
         if scheme == 'random':  # n_features, random, random, (m, s)
             delta = np.zeros(self.x_dim)
-            # Randomly select n_features indices from self.sample_idx
             idx = np.random.choice(self.sample_idx, n_features, replace=False)
-            # Calculate the indices of selected features in the features_tree_idx array
             s_idx, n_f = [], 0
             for i in idx:
                 s_idx += self.features_tree_idx[i]
                 n_f += len(self.features_tree_idx[i])
             s_idx = np.array(s_idx)
-           
             delta[s_idx] = np.random.rand(n_f) ** sparsity_power
             if self.monotonicity is not None:
                 delta *= self.monotonicity
-           
             if self.n_continuous:
+                
                 delta[self.continuous_idx] *=\
                     np.random.choice(2, self.n_continuous)*2-1
             delta = delta / np.linalg.norm(delta, ord=1)\
@@ -747,7 +705,7 @@ class GLOBE_CE():
             else:
                 delta *= np.random.choice(2, self.x_dim)*2-1
             delta = delta/np.linalg.norm(delta, ord=1)*magnitude/self.feature_costs_vector_no_ordinal
-         
+            
         return delta
     
     def evaluate_deltas(self, deltas, scalars, x_aff=None):

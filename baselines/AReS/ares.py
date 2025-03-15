@@ -37,12 +37,11 @@ def create_features_tree(feature_values):
             features_tree[feature] = [feature_value]
         else:
             features_tree[feature] += [feature_value]
-   
     return features_tree
 
 
 class AReS:
-    def __init__(self, model, dataset, X, y, dropped_features=[],
+    def __init__(self, model, dataset, X, dropped_features=[],
                  n_bins=10, ordinal_features=[], normalise=False,
                  constraints=[20, 7, 10], correctness=False):
         """
@@ -119,6 +118,7 @@ class AReS:
         # Store Features. Generate l1 feature costs (need to differentiate between categorical/continuous)
         # Continuous/categorical/non-dropped features are all computed/stored
         self.features_tree = self.dataset.features_tree  # dictionary of form 'feature: [feature values]'
+       
         self.features_tree_dropped = copy.deepcopy(self.features_tree)
         for feature in self.dropped_features:
             del self.features_tree_dropped[feature]
@@ -129,7 +129,6 @@ class AReS:
                 
         # Bin continuous features and store resulting data (dimensionality of input data increases)
         self.X, self.binned_features, self.binned_features_continuous = self.bin_continuous_features(self.X)
-
         self.continuous_features = []  # list of continuous features
         self.feature_costs_vector = np.zeros(len(self.features)-1)
         self.non_ordinal_categories_idx = np.ones(len(self.features)-1, dtype=bool)
@@ -149,8 +148,7 @@ class AReS:
                     self.feature_costs_vector[i:i+n] = 0.5  # categorical features have cost 1 (2 changes of 0.5)
                     self.non_ordinal_categories_idx[i:i+n] = True
                 i += n
-         
-        # either we bin continuous eatures before model training (ordinal categories),
+        # either we bin continuous features before model training (ordinal categories),
         # or we don't (non-ordinal categories)
         # non-continuous features are also included in non-ordinal categories
         # (see self.objective_terms r_costs computation)
@@ -165,25 +163,11 @@ class AReS:
             for feature_value in self.features_tree[feature]:
                 self.X_drop = self.X_drop.drop(feature_value, axis=1)
 
-        self.y = y
         # Compute affected features
-
-        # Convert boolean array to list of indices where the condition is True
-        indices = list((self.preds == 0) & (self.y == 1))
-        self.X_aff_original = self.X_original.iloc[indices].copy().reset_index(drop=True)  # original data
-
-        print(self.X_aff_original.shape)
-
-        self.X_aff = self.X.iloc[indices].copy().reset_index(drop=True)  # data with continuous variables binned
-
-
-        #self.X_aff_original = self.X_original.iloc[(self.preds == 0) & (self.y == 1)].copy()\
-        #    .reset_index(drop=True)  # original data
-        
-        #self.X_aff = self.X.iloc[(self.preds == 0) & (self.y == 1)].copy()\
-        #    .reset_index(drop=True)  # data with continuous variables binned
-        
-         
+        self.X_aff_original = self.X_original.iloc[self.preds == 0].copy()\
+            .reset_index(drop=True)  # original data
+        self.X_aff = self.X.iloc[self.preds == 0].copy()\
+            .reset_index(drop=True)  # data with continuous variables binned
         self.U = self.n_bins * self.e2  # custom objective function
         self.U1 = self.X_aff.shape[0] * self.e1  # incorrectrecourse
         self.U3 = 0  # featurecost, not implemented
@@ -218,6 +202,7 @@ class AReS:
         self.bin_mids_tree = {}
         self.bin_widths = {}
         for x in data.columns:
+            
             if x.split()[0] in self.categorical_features:
                 data_oh.append(pd.DataFrame(data[x]))
                 features.append(x)
@@ -225,7 +210,7 @@ class AReS:
                 self.data_binned[x], self.bins[x] = pd.cut(self.data_binned[x].apply(lambda x: float(x)),
                                                            bins=self.n_bins, retbins=True)
                 one_hot = pd.get_dummies(self.data_binned[x])
-                one_hot.columns = pd.Index(list(one_hot.columns))  # necessary?
+                one_hot.columns = pd.Index(list(one_hot.columns))  
                 data_oh.append(one_hot)
                 cols = self.data_binned[x].cat.categories
                 self.bin_mids_tree[x] = {}
@@ -236,7 +221,7 @@ class AReS:
                     features.append(feature_value)
                     continuous_features.add(feature_value)
                     self.features_tree[x].append(feature_value)
-                    mid = cols.mid[1]-width if i==0 else col.mid  # adjust for pd.cut extending the first bin
+                    mid = cols.mid[1]-width if i==0 else col.mid  
                     self.bin_mids[feature_value] = mid
                     self.bin_mids_tree[x][feature_value] = mid
         data_oh = pd.concat(data_oh, axis=1)
@@ -262,22 +247,16 @@ class AReS:
         if affected_subgroup is None:
             self.RL = copy.deepcopy(self.SD)
         else:
-            self.RL = Apriori(x=self.X_drop, apriori_threshold=0.05,#0.05,
+            self.RL = Apriori(x=self.X_drop, apriori_threshold=apriori_threshold,
                               affected_subgroup=None, max_width=max_width,
                               feature_values_tree=self.feature_values_tree)
 
         # Update affected inputs
-        #self.X_aff_original = self.X_original.iloc[(self.preds == 0) & self.SD.sub_idx]\
-        #    .copy().reset_index(drop=True)  # original data
-        #self.X_aff = self.X.iloc[(self.preds == 0) & self.SD.sub_idx]\
-        #    .copy().reset_index(drop=True)  # data with continuous variables binned
-        
-        indices = list((self.preds == 0) & (self.y == 1) & self.SD.sub_idx)
-        self.X_aff_original = self.X_original.iloc[indices].copy().reset_index(drop=True)  # original data
+        self.X_aff_original = self.X_original.iloc[(self.preds == 0) & self.SD.sub_idx]\
+            .copy().reset_index(drop=True)  # original data
+        self.X_aff = self.X.iloc[(self.preds == 0) & self.SD.sub_idx]\
+            .copy().reset_index(drop=True)  # data with continuous variables binned
 
-
-        self.X_aff = self.X.iloc[indices].copy()#.reset_index(drop=True) 
-       
         print("SD and RL Computed with Lengths {} and {}".format(self.SD.length, self.RL.length))
 
         if save_copy:
@@ -327,7 +306,7 @@ class AReS:
             self.V.objectives = AReS.f_ares(self.V, lams, bounds,
                                             singleton=True)
 
-       
+
         # add correctness later if you cba
 
     def select_groundset(self, s=0):
@@ -382,15 +361,13 @@ class AReS:
         # While there exists a delete/update operation do:
         print("While there exists a delete/update operation, loop:")
         delete, add, exchange = True, True, True
-
-        # Iteratively update the selected triples
         while True:
             # Delete check
             print("Checking Delete")
             delete = False
             for idx in np.arange(N)[R_idx]:
                 R_idx[idx] = False
-                f_delete = self.f(self.V_opt, lams, bounds, idx=R_idx)  # Compute objective after deletion
+                f_delete = self.f(self.V_opt, lams, bounds, idx=R_idx)
                 if f_delete > f_thresh:
                     if print_updates:
                         print("Deleting Element ({} >= {})".format(f_delete, f_thresh))
@@ -468,7 +445,6 @@ class AReS:
         #self.min_costs = np.array(self.min_costs)
         #self.V -= Si
 
-        #Create the final two-level recourse set based on the selected triples
         self.R = TwoLevelRecourseSet()
         self.R.triples = set(self.V_opt.triples_array[R_idx])
         self.R.length = len(self.R.triples)
@@ -514,33 +490,21 @@ class AReS:
     @staticmethod
     def f_custom(tlrs, lams, bound, idx=None,
                  singleton=False, print_terms=False):  #, plot_f=False):
-        
-        # tlrs: Two-level recourse set
-        # lams: Lambda values for weighing accuracy and cost
-        # bound: Bound for the cost
-        # idx: Index array indicating which triples to consider
-        # singleton: Flag indicating whether to treat each triple individually or not
-        # print_terms: Flag indicating whether to print terms for accuracy and cost
-
-       
+        # tlrs = two level recourse set
         if singleton and print_terms:
             raise ValueError('Cannot use parameters singleton and '
                              'print_terms simultaneously')
-        # If idx is not provided, consider all triples
         if idx is None:
             idx = np.ones(tlrs.correct_matrix.shape[0], dtype=bool)
         elif not idx.any():
             return 0
-        
         if singleton:
-            # Compute correctness and cost for each triple separately
             correct = tlrs.correct_matrix[idx].mean(axis=1)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 cost = np.nanmean(tlrs.cost_matrix[idx], axis=1)
             cost[np.isnan(cost)] = 0
         else:
-            # Compute correctness and cost for all triples together
             correct = tlrs.correct_matrix[idx].max(axis=0).mean()
             if correct == 0:
                 cost = bound
@@ -557,7 +521,6 @@ class AReS:
                                                  round(correct, 2)),
                   "\nAverage Cost: {}".format(round(cost, 4)))
             # "{}/{}".format(round(np.average(objectives[objectives!=0]),2), self.lams[1]*self.U))
-        # Compute the objective function value based on accuracy, cost, and lambda values
         return lams[0] * correct + lams[1] * (bound - cost)
     
     def constraints(self, triples):
@@ -631,19 +594,16 @@ class Apriori:
         self.max_width = max_width
         self.apriori_threshold = apriori_threshold
         self.affected_subgroup = affected_subgroup
-        
         self.feature_values_tree = feature_values_tree
         if self.feature_values_tree is None:
             self.feature_values_tree = create_feature_values_tree(x.columns.values, use_values=True)
 
-      
         if (self.apriori_threshold is not None) ^ (self.affected_subgroup is None):
             raise ValueError('Please specify either an affected subgroup or an apriori threshold (and not both)')
         
-        if (self.affected_subgroup is not None) and (self.apriori_threshold is None):
+        if (self.affected_subgroup is not None) and (self.apriori_threshold is not None):
             # Store indices of affected subgroup matches
             self.sub_idx = (self.x[affected_subgroup] == 1).values
-         
             # Drop affected subgroup's feature so
             # apriori doesn't generate invalid rules
             self.x_drop = self.x.copy()
@@ -652,11 +612,10 @@ class Apriori:
                     self.x_drop = self.x_drop.drop(col, axis=1)
             self.conditions = pd.DataFrame(np.array([frozenset({affected_subgroup})]),
                                            columns=['itemsets'])
-           
         # as per paper, SD and RL are the same set generated by apriori
         elif self.apriori_threshold is not None:
             self.sub_idx = np.ones(self.x.shape[0], dtype=bool)
-            print("------",len(self.x))
+            # print(self.x, self.thresh, verbose, max_width)
             self.conditions = apriori(self.x, min_support=self.apriori_threshold,
                                       use_colnames=True, max_len=max_width,
                                       verbose=verbose)
@@ -767,12 +726,8 @@ class TwoLevelRecourseSet:
         if then_generation is not None:
             self.RL.features_tree = create_features_tree(self.RL.x.columns)
         disable_tqdm = False if self.SD.length > 1 else True
-
-        # Loop through SD and RL
         for i in tqdm(range(self.SD.length), disable=disable_tqdm):
-             
-            for j in tqdm(range(self.RL.length), disable=(disable_tqdm)):
-                # Check for no matching features and width constraint
+            for j in tqdm(range(self.RL.length), disable=(not disable_tqdm)):
                 no_matching_features = self.SD.features[i].isdisjoint(self.RL.features[j])
                 width_constraint = (self.SD.widths[i] + self.RL.widths[j]) <= max_width
                 if width_constraint and no_matching_features:
@@ -810,9 +765,7 @@ class TwoLevelRecourseSet:
                             if identical_features and not identical_feature_values:
                                 rule = (self.SD.values[i], self.RL.values[j],
                                         RL2_values[k])
-                                 
                                 self.triples.add(rule)
-         
         self.length = len(self.triples)
 
     def evaluate_triples(self, ares, r=None, save_mode=0,
@@ -834,9 +787,7 @@ class TwoLevelRecourseSet:
                  member of X_aff (affected inputs requiring recourse)
                  vector of final counterfactuals for each member of X_aff
         """
-        
         r = self.length if r is None else int(r)  # number of triples to evaluate
-        print("------------------------------------",self.length)
         if r > self.length:
             if len(self.triples_array) >= r:
                 self.select_triples(r)
@@ -844,10 +795,8 @@ class TwoLevelRecourseSet:
                 raise ValueError(
                     "Number of elements for evaluation ({}) greater than number "
                     "of triples in set ({})".format(r, len(self.triples_array)))
-            
         self.ares = ares  # originally sized input data
         n = self.ares.X_aff_original.shape[0]  # number of affected inputs
-
         self.correct_matrix = np.zeros((r, n), dtype=int)
         self.cost_matrix = np.zeros((r, n))
         self.cfx_matrix = np.zeros((r, *self.ares.X_aff_original.shape))
@@ -862,16 +811,15 @@ class TwoLevelRecourseSet:
         self.featurechange = np.zeros(r, dtype=int)
 
         for i, triple in tqdm(zip(range(r), self.triples), disable=disable_tqdm):
-            # Evaluate each triple and store the results
             self.correct_matrix[i], self.cost_matrix[i], self.cfx_matrix[i],\
                 self.cover_matrix[i], self.featurecost[i], self.featurechange[i]\
                 = self.evaluate_triple(triple, ares)
-            
-            cor = self.correct_matrix[i].mean()  # Compute the mean correct prediction rate for the current triple
-            if cor > cor_max:  # Update maximum correct prediction rate and corresponding index if needed
+
+            cor = self.correct_matrix[i].mean()
+            if cor > cor_max:
                 cor_max = cor
                 self.max_idxs[i] = True
-            self.correct_max[i] = cor_max  # Store the maximum correct prediction rate
+            self.correct_max[i] = cor_max
 
             self.correct_cumulative[i] = np.maximum(cor_cumulative, self.correct_matrix[i])
             if self.correct_cumulative[i].sum() > cor_cumulative.sum():
@@ -892,13 +840,13 @@ class TwoLevelRecourseSet:
         idx = self.correct_matrix == 0
         self.cost_matrix[idx] = np.nan
         if self.length != 0:
-            self.correct_vector = self.correct_matrix.max(axis=0)   # Compute the maximum correct prediction rate for each column (triple)
+            self.correct_vector = self.correct_matrix.max(axis=0)
             self.accuracy = self.correct_vector.mean()
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning) 
-                self.cost_vector = np.nanmin(self.cost_matrix, axis=0)  # Compute the minimum cost for each column (triple)
-                self.average_cost = np.nanmean(self.cost_vector)  # Compute the average cost
-            self.cover = self.cover_matrix.max(axis=0) # Compute the maximum coverage rate
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                self.cost_vector = np.nanmin(self.cost_matrix, axis=0)
+                self.average_cost = np.nanmean(self.cost_vector)
+            self.cover = self.cover_matrix.max(axis=0)
 
         if save_mode != 0:
             if save_mode == 1:
@@ -906,7 +854,7 @@ class TwoLevelRecourseSet:
             elif save_mode == 2:
                 self.triples = set(self.triples_array[self.cumulative_idxs])
             self.length = len(self.triples)
-        
+
     def index_terms(self, idx):
         self.correct_matrix = self.correct_matrix[idx]
         self.cost_matrix = self.cost_matrix[idx]
@@ -934,29 +882,24 @@ class TwoLevelRecourseSet:
         triple_costs = np.zeros(n)
 
         # Compute (AReS requires all to be true)
-
-        # Extract outer_ifs, inner_ifs, and thens from the triple
         outer_ifs, inner_ifs, thens =\
-            list(triple[0]), list(triple[1]), list(triple[2])   
-        # Check if the conditions in the triple are met for each row in the dataset
-        triple_cover = ares.X_aff[outer_ifs + inner_ifs].all(axis=1).values
-
-        # Compute the cost and change in features for the triple
+            list(triple[0]), list(triple[1]), list(triple[2])
+        triple_cover = ares.X_aff[outer_ifs + inner_ifs]\
+            .all(axis=1).values
         featurecost, featurechange, cfx =\
             self.triple_cost(triple, ares, triple_cfx)
 
-        if triple_cover.any():  # Check if any rows satisfy the conditions in the triple
+        if triple_cover.any():
             # Compute predictions and costs
-            cfx = cfx[triple_cover] # Filter the dataset to include only the covered rows
-            
+            cfx = cfx[triple_cover]
             if ares.normalise:
                 cfx_norm = (cfx.values - ares.means) / ares.stds
                 corrects = ares.model.predict(cfx_norm)
             else:
                 corrects = ares.model.predict(cfx.values)
-            triple_corrects[triple_cover] = corrects * 100 # Store the predictions for the covered rows
-            triple_costs[triple_cover] = featurechange # Store the cost for the covered rows
-            triple_cfx[triple_cover] = cfx  # Update the dataset for the covered rows
+            triple_corrects[triple_cover] = corrects * 100
+            triple_costs[triple_cover] = featurechange
+            triple_cfx[triple_cover] = cfx
 
         return triple_corrects, triple_costs, triple_cfx,\
                triple_cover, featurecost, featurechange
@@ -1039,5 +982,3 @@ class TwoLevelRecourseSet:
             self.triples.add(i)
         self.length = len(self.triples)
         print("Candidate Set Filtered with Length:", s)
-
-

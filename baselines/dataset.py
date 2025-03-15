@@ -19,8 +19,7 @@ import pandas as pd
 import urllib.request
 import datetime
 from aif360.sklearn.datasets import fetch_compas
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, KBinsDiscretizer
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, KBinsDiscretizer
+from sklearn.preprocessing import LabelEncoder
 class dataset_loader():
     def __init__(self,  name=None,  data_path="datasets/",
                  dropped_features=[], n_bins=None):
@@ -38,12 +37,15 @@ class dataset_loader():
         
         # Dictionary of source URLs per dataset
         self.datasets = {
-            "student":"-",
             "compas":         "https://raw.githubusercontent.com/propublica/"
                               + "compas-analysis/master/compas-scores-two-years.csv",
             "german_credit":  "https://archive.ics.uci.edu/ml/machine-learning"
                               + "-databases/statlog/german/german.data",
-            "adult_income":   "https://archive.ics.uci.edu/ml/machine-learning"
+            "Adult":   "https://archive.ics.uci.edu/ml/machine-learning"
+                              + "-databases/adult/adult.data",
+            "AdultCalifornia":   "https://archive.ics.uci.edu/ml/machine-learning"
+                              + "-databases/adult/adult.data",
+            "AdultLouisiana":   "https://archive.ics.uci.edu/ml/machine-learning"
                               + "-databases/adult/adult.data",
             "default_credit": "https://archive.ics.uci.edu/ml/machine-learning"
                               + "databases/00350/default%20of%20credit%20card"
@@ -54,66 +56,81 @@ class dataset_loader():
         
         # Dictionary of features per dataset
         self.columns = {
-            "student":['school', 'sex', 'age', 'address', 'famsize', 'Pstatus', 'Medu', 'Fedu',
-                        'Mjob', 'Fjob', 'reason', 'guardian', 'traveltime', 'studytime',
-                        'failures', 'schoolsup', 'famsup', 'paid', 'activities', 'nursery',
-                        'higher', 'internet', 'romantic', 'famrel', 'freetime', 'goout', 'Dalc',
-                        'Walc', 'health', 'absences', 'target'],
-
-            "compas": ['sex','age', 'race', 'juv_fel_count', 'juv_misd_count',
+            "Compas": ['sex', 'age', 'race', 'juv_fel_count', 'juv_misd_count',
                         'juv_other_count', 'priors_count', 'c_charge_degree','two_year_recid'],
-
-            "german_credit": ["Existing-Account-Status", "Month-Duration",
+            "GermanCredit": ["Existing-Account-Status", "Month-Duration",
                               "Credit-History", "Purpose", "Credit-Amount",
                               "Savings-Account", "Present-Employment", "Instalment-Rate",
                               "Sex", "Guarantors", "Residence","Property", "Age",
                               "Installment", "Housing", "Existing-Credits", "Job",
                               "Num-People", "Telephone", "Foreign-Worker", "Status"],
-            "adult_income": ["Age", "Workclass", "Fnlwgt", "Education", "Marital-Status",
-                             "Occupation", "Relationship", "Race", "Sex", "Capital-Gain",
-                             "Capital-Loss", "Hours-Per-Week", "Native-Country", "Status"],
+
+            "Adult": ["age", "workclass", "education","education-num", "marital-status",
+                             "occupation", "relationship", "race", "sex", "capital-gain",
+                             "capital-loss", "hours-per-week", "target"],
+            "AdultCalifornia": ['Age', 'ClassofWorker', 'EducationalAttainment', 'MaritalStatus',
+                                'Occupation', 'PlaceofBirth', 'HoursWorkedperWeek', 'sex', 'race',
+                                'Target'],
+            "AdultLouisiana": ['Age', 'ClassofWorker', 'EducationalAttainment', 'MaritalStatus',
+                                'Occupation', 'PlaceofBirth', 'HoursWorkedperWeek', 'sex', 'race',
+                                'Target'],
+
             "default_credit": ['Limit_Bal', 'Sex', 'Education', 'Marriage', 'Age', 'Pay_0',
                                'Pay_2', 'Pay_3', 'Pay_4', 'Pay_5', 'Pay_6', 'Bill_Amt1',
                                'Bill_Amt2', 'Bill_Amt3', 'Bill_Amt4', 'Bill_Amt5',
                                'Bill_Amt6', 'Pay_Amt1', 'Pay_Amt2', 'Pay_Amt3', 'Pay_Amt4',
                                'Pay_Amt5', 'Pay_Amt6', 'Status'],
-            "heloc": ['ExternalRiskEstimate', 'MSinceOldestTradeOpen',
-                      'MSinceMostRecentTradeOpen', 'AverageMInFile',
-                      'NumSatisfactoryTrades', 'NumTrades60Ever2DerogPubRec',
-                      'NumTrades90Ever2DerogPubRec', 'PercentTradesNeverDelq',
-                      'MSinceMostRecentDelq', 'MaxDelq2PublicRecLast12M', 'MaxDelqEver',
-                      'NumTotalTrades', 'NumTradesOpeninLast12M', 'PercentInstallTrades',
-                      'MSinceMostRecentInqexcl7days', 'NumInqLast6M',
-                      'NumInqLast6Mexcl7days', 'NetFractionRevolvingBurden',
-                      'NetFractionInstallBurden', 'NumRevolvingTradesWBalance',
-                      'NumInstallTradesWBalance', 'NumBank2NatlTradesWHighUtilization',
-                      'PercentTradesWBalance', 'Status']
+
+            "Heloc": ['ExternalRiskEstimate', 'MSinceOldestTradeOpen',
+                        'MSinceMostRecentTradeOpen', 'AverageMInFile', 'NumSatisfactoryTrades',
+                        'NumTrades60Ever2DerogPubRec', 'NumTrades90Ever2DerogPubRec',
+                        'PercentTradesNeverDelq', 'MSinceMostRecentDelq',
+                        'MaxDelq2PublicRecLast12M', 'MaxDelqEver', 'NumTotalTrades',
+                        'NumTradesOpeninLast12M', 'PercentInstallTrades',
+                        'MSinceMostRecentInqexcl7days', 'NumInqLast6M', 'NumInqLast6Mexcl7days',
+                        'NetFractionRevolvingBurden', 'NetFractionInstallBurden',
+                        'NumRevolvingTradesWBalance', 'NumInstallTradesWBalance',
+                        'NumBank2NatlTradesWHighUtilization', 'PercentTradesWBalance', 'RiskPerformance'], 
+
+            "Student": ['school', 'sex', 'age', 'address', 'famsize', 'Pstatus', 'Medu', 'Fedu',
+                        'Mjob', 'Fjob', 'reason', 'guardian', 'traveltime', 'studytime',
+                        'failures', 'schoolsup', 'famsup', 'paid', 'activities', 'nursery',
+                        'higher', 'internet', 'romantic', 'famrel', 'freetime', 'goout', 'Dalc',
+                        'Walc', 'health', 'absences', 'target']
+
         }
         
         # Dictionary of categorical features per dataset
         self.categorical_features = {
-            "student":["sex","Mjob","Fjob", "reason", "guardian"],
-            "compas": ["sex", "race"],
-            "german_credit": ['Existing-Account-Status', 'Credit-History', 'Purpose',
+            "Compas": ["sex", "race",'c_charge_degree'],
+            "GermanCredit": ['Existing-Account-Status', 'Credit-History', 'Purpose',
                               'Savings-Account', 'Present-Employment', 'Instalment-Rate',
                               'Sex', 'Guarantors', 'Residence', 'Property', 'Installment',
                               'Housing', 'Existing-Credits', 'Job', 'Num-People',
-                              'Telephone', 'Foreign-Worker'],
-            "adult_income": ['Workclass', 'Education', 'Marital-Status', 'Occupation',
-                             'Relationship', 'Race', 'Sex', 'Native-Country'],
+                              'Telephone', 'Foreign-Worker','Marital-Status'],
+            "Adult": ['workclass', 'education', 'marital-status', 'occupation',
+                             'relationship', 'race', 'sex'],
+            "AdultLouisiana": ['ClassofWorker','EducationalAttainment','MaritalStatus','sex','race', 'Occupation', 'PlaceofBirth'],
+            "AdultCalifornia": ['ClassofWorker','EducationalAttainment','MaritalStatus','sex','race', 'Occupation', 'PlaceofBirth'],
+
             "default_credit": ['Sex', 'Education', 'Marriage', 'Pay_0', 'Pay_2', 'Pay_3',
                                'Pay_4', 'Pay_5', 'Pay_6'],
-            "heloc": []
+            "Heloc": [],
+            "Student": ['school', 'sex', 'address', 'famsize', 'Pstatus', 'Medu', 'Fedu','Mjob', 'Fjob', 'reason','guardian','traveltime','studytime','failures','schoolsup','famsup','paid', 'activities', 'nursery',
+                        'higher', 'internet', 'romantic', 'famrel', 'freetime', 'goout', 'Dalc',
+                        'Walc', 'health']
+
         }
         
         # Dictionary of continuous features per dataset (computed)
         self.continuous_features = {}
         for dataset in self.columns:
+            
             self.continuous_features[dataset] = []
             for column in self.columns[dataset][:-1]:
                 if column not in self.categorical_features[dataset]:
                     self.continuous_features[dataset].append(column)
-         
+                    
         # Initialization
         self.name = name
         if self.name is not None:  # process dataset if specified
@@ -132,62 +149,131 @@ class dataset_loader():
         """
         Initialization method for preprocessing the data (one_hot encodings, feature names)
         """
-        if self.name != "student":
-            if self.name not in self.datasets:
-                raise Exception('Dataset name does not match any known datasets.')
-            if not path.exists(self.data_path):
-                os.makedirs(self.data_path)
-                
-            url = self.datasets[self.name]
-            file_name = '{}.data'.format(self.name.split('_')[0])  # e.g. german.data
-            file_address = self.data_path+file_name
-            if not path.exists(file_address):
-                print('Downloading {} Dataset...'.format(self.name.replace('_', ' ').title()))
-                urllib.request.urlretrieve(self.datasets[self.name], file_address)
-                print('Dataset Successfully Downloaded.')
-
-
-        if self.name == "student":
-            data = pd.read_csv(self.data_path+"/student.csv")
-            cols = self.columns[self.name]
-            data.columns = cols
+        if self.name not in self.columns:
+            raise Exception('Dataset name does not match any known datasets.')
+        if not path.exists(self.data_path):
+            os.makedirs(self.data_path)
             
-
-        elif self.name == "compas":
-            label_encoder = LabelEncoder()
+        #url = self.datasets[self.name]
+        #file_name = '{}.data'.format(self.name.split('_')[0])  # e.g. german.data
+        #file_address = self.data_path+file_name
+        #if not path.exists(file_address):
+            #print('Downloading {} Dataset...'.format(self.name.replace('_', ' ').title()))
+            #urllib.request.urlretrieve(self.datasets[self.name], file_address)
+            #print('Dataset Successfully Downloaded.')
+            
+        if self.name == "Compas":
+            
+            
             X, y = fetch_compas()
             X = X.reset_index(drop=True)
-            y = y.reset_index(drop=True)
+            y = y.reset_index(drop=True)           
             TARGET_COLUMNS = 'two_year_recid'
-            data = pd.concat([X, y], axis=1)
-            data[TARGET_COLUMNS] = label_encoder.fit_transform(data[TARGET_COLUMNS])
+            y = pd.DataFrame(y, columns=[TARGET_COLUMNS])
+            data = X
             data = data.drop(['c_charge_desc', 'age_cat'], axis=1)
-            cols = self.columns[self.name]
-            data.columns = cols
-            
-           
-        
-        elif self.name == "german_credit":
-            data = pd.read_csv(file_address, header = None, delim_whitespace = True)
+            data[TARGET_COLUMNS] = y
             data.columns = self.columns[self.name]
-            # Prepocess targets to Bad = 0, Good = 1
-            data[data.columns[-1]] = 2 - data[data.columns[-1]]
+             
+            data['two_year_recid'] = data['two_year_recid'].replace(['Survived', 'Recidivated'],
+                                                                      [1, 0])
             
-        elif self.name == 'adult_income':
-            data = pd.read_csv(file_address, header = None, delim_whitespace = True)
+            label_encoders = {}
+
+            for col in ['sex', 'race', 'c_charge_degree']: 
+                le = LabelEncoder()
+                data[col] = le.fit_transform(data[col])
+                label_encoders[col] = le 
+             
+        elif self.name == "Student":
+            data = pd.read_csv(f"datasets/student.csv")
+            data.columns = self.columns[self.name]
+            label_encoders = {}
+
+            for col in ['school', 'sex', 'address', 'famsize', 'Pstatus', 'Medu', 'Fedu','Mjob', 'Fjob', 'reason','guardian','traveltime','studytime','failures','schoolsup','famsup','paid', 'activities', 'nursery',
+                        'higher', 'internet', 'romantic', 'famrel', 'freetime', 'goout', 'Dalc',
+                        'Walc', 'health']: 
+                le = LabelEncoder()
+                data[col] = le.fit_transform(data[col])
+                label_encoders[col] = le 
+              
+        elif self.name == "GermanCredit":
+            status_sex_mapping = {
+                'A91': ('male', 'divorced/separated'),
+                'A92': ('female', 'divorced/separated/married'),
+                'A93': ('male', 'single'),
+                'A94': ('male', 'married/widowed'),
+                'A95': ('female', 'single')}
+            data = pd.read_csv(f"datasets/GermanCredit.data", header=None, delim_whitespace = True)
+
+            data.columns = self.columns[self.name]
+            data[data.columns[-1]] = 2 - data[data.columns[-1]]
+            data['Sex'], data['Marital-Status'] = zip(*data['Sex'].map(status_sex_mapping))
+            columns = list(data.columns)
+            columns.insert(columns.index('Status'), columns.pop(columns.index('Marital-Status')))
+            data = data[columns]
+
+
+            data['Existing-Account-Status'] = data['Existing-Account-Status'].apply(lambda x: 'A10' if x == 'A14' else x)
+            data['Savings-Account'] = data['Savings-Account'].apply(lambda x: 'A60' if x == 'A65' else x)
+            label_encoders = {}
+            for col in ['Existing-Account-Status', 'Credit-History', 'Purpose',
+                              'Savings-Account', 'Present-Employment', 'Instalment-Rate',
+                              'Sex', 'Guarantors', 'Residence', 'Property', 'Installment',
+                              'Housing', 'Existing-Credits', 'Job', 'Num-People',
+                              'Telephone', 'Foreign-Worker', 'Marital-Status']: 
+                le = LabelEncoder()
+                data[col] = le.fit_transform(data[col])
+                label_encoders[col] = le 
+            #data = data[[col for col in data.columns[1:]] + [data.columns[0]]]
+            
+        elif self.name == 'Adult':
+            #data = pd.read_csv(file_address, header = None, delim_whitespace = True)
+            data = pd.read_csv(f"datasets/adult.csv")
+
             # remove redundant education num column (education processed in one_hot)
-            data = data.drop(4, axis=1)
+            #data = data.drop(4, axis=1)
             # remove rows with missing values: '?,'
             data = data.replace('?,', np.nan); data = data.dropna() 
             data.columns = self.columns[self.name]
-            for col in data.columns[:-1]:
-                if col not in self.categorical_features[self.name]:
-                    data[col] = data[col].apply(lambda x: float(x[:-1]))
-                else:
-                    data[col] = data[col].apply(lambda x: x[:-1])
-            # Prepocess Targets to <=50K = 0, >50K = 1
-            data[data.columns[-1]] = data[data.columns[-1]].replace(['<=50K', '>50K'],
-                                                                    [0, 1])
+         
+            
+        elif self.name == 'AdultLouisiana':
+            
+
+            data = pd.read_csv(f"datasets/AdultLouisiana.csv")
+            data.rename(columns={
+            'Class of Worker': 'ClassofWorker',
+            'Educational Attainment': 'EducationalAttainment',
+            'Marital Status': 'MaritalStatus',
+            'Place of Birth': 'PlaceofBirth',
+            'Hours Worked per Week':'HoursWorkedperWeek',
+            'Sex': 'sex',
+            'Race':'race'
+            }, inplace=True)
+
+            data = data.replace('?,', np.nan); data = data.dropna() 
+            data.columns = self.columns[self.name]
+           
+
+        elif self.name == 'AdultCalifornia':
+            from sklearn.model_selection import train_test_split
+
+            data = pd.read_csv(f"datasets/AdultCalifornia.csv")
+            data.rename(columns={
+            'Class of Worker': 'ClassofWorker',
+            'Educational Attainment': 'EducationalAttainment',
+            'Marital Status': 'MaritalStatus',
+            'Place of Birth': 'PlaceofBirth',
+            'Hours Worked per Week':'HoursWorkedperWeek',
+            'Sex': 'sex',
+            'Race':'race'
+            }, inplace=True)
+
+            _, data = train_test_split(data, test_size=0.20, stratify=data[['sex', 'race']], random_state=42)
+            data = data.reset_index(drop=True)
+            data = data.replace('?,', np.nan); data = data.dropna() 
+            data.columns = self.columns[self.name]
             
         elif self.name == 'default_credit':
             data = pd.read_excel(file_address, header=1)
@@ -195,20 +281,27 @@ class dataset_loader():
             data.columns = self.columns[self.name]
             data[data.columns[-1]] = 1 - data[data.columns[-1]]
 
-        elif self.name == "heloc":
-            data = pd.read_csv(file_address)
-            # Remove rows where all NaN
+        elif self.name == "Heloc":
+            data = pd.read_csv(f"datasets/heloc.csv")
             data = data[(data.iloc[:, 1:] >= 0).all(axis=1)]
-            # reset the index
-            data = data.reset_index(drop=True)
+            
+            # Remove rows where all NaN
+            #data = data[(data.iloc[:, 1:]>=0).any(axis=1)]
             # Encode string labels
-            #data['RiskPerformance'] = data['RiskPerformance'].replace(['Bad', 'Good'],
-                                                                      #[0, 1])
-            # Move labels to final column (necessary for self.get_split)
-            y = data.pop('RiskPerformance')
-            data['RiskPerformance'] = y
             data['RiskPerformance'] = data['RiskPerformance'].replace(['Bad', 'Good'],
                                                                       [0, 1])
+            data = data[[col for col in data.columns[1:]] + [data.columns[0]]]
+
+            # Move labels to final column (necessary for self.get_split)
+            #y = data.pop('RiskPerformance')
+            #data['RiskPerformance'] = y
+            # Convert negative values to NaN
+            #data = data[data>=0]
+            # Replace NaN values with median
+            #nan_cols = data.isnull().any(axis=0)
+            #for col in data.columns:
+                #if nan_cols[col]:
+                   # data[col] = data[col].replace(np.nan, np.nanmedian(data[col]))
             
         else:
             raise Exception('Dataset name does not match any known datasets.')
@@ -218,20 +311,8 @@ class dataset_loader():
             data = data.drop(feature, axis=1)
         data_oh, self.features = self.one_hot(data)
         self.features.append(data.columns[-1])
-        ### Scale the dataset
-       
         self.data = pd.concat([data_oh, data[data.columns[-1]]], axis=1)
-        if self.name != "heloc":
-            self.data = self.data.astype(int)
-        self.data.to_csv('compas.csv', index=False)
-    
-    def calculate_num_bins(self, num_unique_values, value_range):
-        # Calculate the number of bins using a heuristic approach
-        num_bins = min(6, int(np.log2(num_unique_values)) + 1)
-        # Limit the number of bins based on the range of values
-        num_bins = min(num_bins, value_range)
-        return num_bins
-    
+        
     def one_hot(self, data):
         """
         Improvised method for one-hot encoding the data
@@ -240,77 +321,48 @@ class dataset_loader():
         Outputs: data_oh (one-hot encoded data)
                  features (list of feature values after one-hot encoding)
         """
-        
-        label_encoder_1 = LabelEncoder()
-        labelEncoder = preprocessing.LabelEncoder()
+        label_encoder = preprocessing.LabelEncoder()
         data_encode = data.copy()
         self.bins = {}
         self.bins_tree = {}
-        onehot_encoder = OneHotEncoder()
-        data_oh, features = [], []
-        data_one_hot = []
-        one_hot_encoded_columns = []
-        one_hot_features = []
-        one_hot_feature_tree = {}
         
-       
+        # Assign encoded features to one hot columns
+        data_oh, features = [], []
         for x in data.columns[:-1]:
-            
+            self.features_tree[x] = []
             categorical = x in self.categorical_features[self.name]
-
-            if (x == "sex" or (x in self.categorical_features or (data_encode[x].dtype == 'object' or data_encode[x].dtype == 'category') and len(data_encode[x].unique()) > 2)):
-                data_encode[x] = labelEncoder.fit_transform(data_encode[x])
-                cols = labelEncoder.classes_
-                
-            elif (data_encode[x].dtype == 'object' or data_encode[x].dtype == 'category') and len(data_encode[x].unique()) == 2:
-                self.features_tree[x] = []
-               
-                data_encode[x] = label_encoder_1.fit_transform(data_encode[x])
-                cols = label_encoder_1.classes_
-                
-                data_oh.append(data_encode[x])
-                features.append(x)
-            
-                continue
-           
+            if categorical:
+                data_encode[x] = label_encoder.fit_transform(data_encode[x])
+                cols = label_encoder.classes_
             elif self.n_bins is not None:
                 data_encode[x] = pd.cut(data_encode[x].apply(lambda x: float(x)),
                                         bins=self.n_bins)
                 cols = data_encode[x].cat.categories
                 self.bins_tree[x] = {}
-
-            
             else:
-                self.features_tree[x] = []
                 data_oh.append(data[x])
                 features.append(x)
                 continue
                 
             one_hot = pd.get_dummies(data_encode[x])
-            data_one_hot.append(one_hot)
-            one_hot_feature_tree[x] = []
+            if self.name=='compas' and x.lower()=='age_cat':
+                one_hot = one_hot[[2, 0, 1]]
+                cols = cols[[2, 0, 1]]
+            data_oh.append(one_hot)
             for col in cols:
                 feature_value = x + " = " + str(col)
-                one_hot_features.append(feature_value)
-                one_hot_feature_tree[x].append(feature_value)
+                features.append(feature_value)
+                self.features_tree[x].append(feature_value)
                 if not categorical:
                     self.bins[feature_value] = col.mid
                     self.bins_tree[x][feature_value] = col.mid
-        
-     
+                
         data_oh = pd.concat(data_oh, axis=1, ignore_index=True)
-        if self.name == "heloc":
-            data_oh.columns = features
-            return data_oh, features
-        data_one_hot = pd.concat(data_one_hot, axis=1) 
-        data_oh = pd.concat([data_oh, data_one_hot], axis=1, ignore_index=True)
-        features.extend(one_hot_features)
-        self.features_tree.update(one_hot_feature_tree)
-
         data_oh.columns = features
+   
         return data_oh, features
     
-    def get_split(self, ratio=0.7, normalise=True, shuffle=False,
+    def get_split(self, ratio=0.8, normalise=True, shuffle=False,
                   return_mean_std=False, print_outputs=False):
         """
         Method for returning training/test split with optional normalisation/shuffling
@@ -334,14 +386,14 @@ class dataset_loader():
             print("\033[1mProportion of 1s in Test Data:\033[0m {}%"\
                   .format(round(np.average(y_test)*100, 2)))
         
-        #x_means, x_stds = x_train.mean(axis=0), x_train.std(axis=0)
+        x_means, x_stds = x_train.mean(axis=0), x_train.std(axis=0)
         
-        '''if normalise:
+        if normalise:
             x_train = (x_train - x_means)/x_stds
             x_test = (x_test - x_means)/x_stds
         
         if return_mean_std:
-            return x_train, y_train, x_test, y_test, x_means, x_stds'''
+            return x_train, y_train, x_test, y_test, x_means, x_stds
         return x_train, y_train, x_test, y_test
     
     def process_compas(self, data):
