@@ -122,7 +122,6 @@ class dataset_loader():
 
         }
         
-        # Dictionary of continuous features per dataset (computed)
         self.continuous_features = {}
         for dataset in self.columns:
             
@@ -154,16 +153,8 @@ class dataset_loader():
         if not path.exists(self.data_path):
             os.makedirs(self.data_path)
             
-        #url = self.datasets[self.name]
-        #file_name = '{}.data'.format(self.name.split('_')[0])  # e.g. german.data
-        #file_address = self.data_path+file_name
-        #if not path.exists(file_address):
-            #print('Downloading {} Dataset...'.format(self.name.replace('_', ' ').title()))
-            #urllib.request.urlretrieve(self.datasets[self.name], file_address)
-            #print('Dataset Successfully Downloaded.')
             
         if self.name == "Compas":
-            
             
             X, y = fetch_compas()
             X = X.reset_index(drop=True)
@@ -225,15 +216,10 @@ class dataset_loader():
                 le = LabelEncoder()
                 data[col] = le.fit_transform(data[col])
                 label_encoders[col] = le 
-            #data = data[[col for col in data.columns[1:]] + [data.columns[0]]]
+           
             
         elif self.name == 'Adult':
-            #data = pd.read_csv(file_address, header = None, delim_whitespace = True)
             data = pd.read_csv(f"datasets/adult.csv")
-
-            # remove redundant education num column (education processed in one_hot)
-            #data = data.drop(4, axis=1)
-            # remove rows with missing values: '?,'
             data = data.replace('?,', np.nan); data = data.dropna() 
             data.columns = self.columns[self.name]
          
@@ -285,28 +271,14 @@ class dataset_loader():
             data = pd.read_csv(f"datasets/heloc.csv")
             data = data[(data.iloc[:, 1:] >= 0).all(axis=1)]
             
-            # Remove rows where all NaN
-            #data = data[(data.iloc[:, 1:]>=0).any(axis=1)]
-            # Encode string labels
             data['RiskPerformance'] = data['RiskPerformance'].replace(['Bad', 'Good'],
                                                                       [0, 1])
             data = data[[col for col in data.columns[1:]] + [data.columns[0]]]
 
-            # Move labels to final column (necessary for self.get_split)
-            #y = data.pop('RiskPerformance')
-            #data['RiskPerformance'] = y
-            # Convert negative values to NaN
-            #data = data[data>=0]
-            # Replace NaN values with median
-            #nan_cols = data.isnull().any(axis=0)
-            #for col in data.columns:
-                #if nan_cols[col]:
-                   # data[col] = data[col].replace(np.nan, np.nanmedian(data[col]))
-            
         else:
             raise Exception('Dataset name does not match any known datasets.')
 
-        # Drop features and one hot encode
+        
         for feature in self.dropped_features:
             data = data.drop(feature, axis=1)
         data_oh, self.features = self.one_hot(data)
