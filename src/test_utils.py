@@ -204,7 +204,7 @@ def initialize_FACEGroup_attributes(datasetName='Student', skip_bandwith_calcula
 
 def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method, max_d, k_values, x_size, y_size, tick_params_size,
               ax1_ylabel=True, ax2_ylabel=True, legend_inside=True, legend_fontsize=16, loc="best", round_precision_wij=3, round_precision_v=2):
-    plt.style.use('seaborn-muted')
+    # plt.style.use('seaborn-muted')
     plt.rcParams.update({
         "font.family": "serif",
         "axes.titlesize": tick_params_size,
@@ -225,11 +225,11 @@ def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method,
     color_gfce_dists = '#8172B3'  # Muted purple
 
     # First axis
-    ax1.plot(x_values, face_wij, '--o', color=color_face_wij, label="Face Wij Cost", markersize=8, alpha=0.9, linewidth=4)
-    ax1.plot(x_values_offset, gfce_wij, '--o', color=color_gfce_wij, label="FACEGroup Wij Cost", markersize=8, alpha=0.9, linewidth=4)
+    ax1.plot(x_values, face_wij, '--o', color=color_face_wij, label="Face Path Cost", markersize=8, alpha=0.9, linewidth=6)
+    ax1.plot(x_values_offset, gfce_wij, '--o', color=color_gfce_wij, label="FACEGroup Path Cost", markersize=8, alpha=0.9, linewidth=6)
 
     if ax1_ylabel:
-        ax1.set_ylabel("Avg Wij Cost", fontsize=tick_params_size)
+        ax1.set_ylabel("Avg Path Cost", fontsize=tick_params_size)
 
     ax1.set_xticks(x_values)
     ax1.set_xticklabels([int(k) for k in k_values])
@@ -240,10 +240,10 @@ def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method,
     ax1.set_yticks(y1ticks_raw)
 
     ax2 = ax1.twinx()
-    ax2.plot(x_values, face_dists, '-o', color=color_face_dists, label="Face Vector Costs", markersize=8, alpha=0.9, linewidth=4)
-    ax2.plot(x_values_offset, gfce_dists, '-o', color=color_gfce_dists, label="FACEGroup Vector Costs", markersize=8, alpha=0.9, linewidth=4)
+    ax2.plot(x_values, face_dists, '-o', color=color_face_dists, label="Face L2 Cost", markersize=8, alpha=0.9, linewidth=6)
+    ax2.plot(x_values_offset, gfce_dists, '-o', color=color_gfce_dists, label="FACEGroup L2 Cost", markersize=8, alpha=0.9, linewidth=6)
     if ax2_ylabel:
-        ax2.set_ylabel("Avg Vector Cost", fontsize=tick_params_size)
+        ax2.set_ylabel("Avg $L_2$ Cost", fontsize=tick_params_size)
 
     y2_min = min(min(face_dists), min(gfce_dists))
     y2_max = max(max(face_dists), max(gfce_dists))
@@ -264,14 +264,14 @@ def face_plot(datasetName, face_dists, gfce_dists, face_wij, gfce_wij, d_method,
         fig_legend = plt.figure(figsize=(4, 2))
         ax_legend = fig_legend.add_subplot(111)
 
-        face_wij_line = Line2D([0, 0], [0, 2], linestyle='--', marker='o', color=color_face_wij, markersize=8, linewidth=4, label="Face Wij Costs")
-        gfce_wij_line = Line2D([0, 0], [0, 1], linestyle='--', marker='o', color=color_gfce_wij, markersize=8, linewidth=4, label="FACEGroup Wij Costs")
-        face_dists_line = Line2D([0, 1], [0, 0], linestyle='-', marker='o', color=color_face_dists, markersize=8, linewidth=4, label="Face Vector Costs")
-        gfce_dists_line = Line2D([0, 1], [0, 0], linestyle='-', marker='o', color=color_gfce_dists, markersize=8, linewidth=4, label="FACEGroup Vector Costs")
+        face_wij_line = Line2D([0, 0], [0, 2], linestyle="dashed", marker='o', color=color_face_wij, markersize=8, linewidth=4, label="Face Path Cost")
+        gfce_wij_line = Line2D([0, 0], [0, 1], linestyle='dashed', marker='o', color=color_gfce_wij, markersize=8, linewidth=4, label="FACEGroup Path Cost")
+        face_dists_line = Line2D([0, 1], [0, 0], linestyle='solid', marker='o', color=color_face_dists, markersize=8, linewidth=4, label="Face $L_2$ Cost")
+        gfce_dists_line = Line2D([0, 1], [0, 0], linestyle='solid', marker='o', color=color_gfce_dists, markersize=8, linewidth=4, label="FACEGroup $L_2$ Cost")
 
-        ax_legend.legend([face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line], 
+        ax_legend.legend([face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line],
                             [line.get_label() for line in [face_wij_line, gfce_wij_line, face_dists_line, gfce_dists_line]], 
-                            loc='center', fontsize=legend_fontsize, frameon=False)
+                            loc='center', fontsize=legend_fontsize, frameon=False, ncol=4)
         ax_legend.axis('off')
 
         fig_legend.savefig(f"{FACEGroup_DIR}/tmp/{datasetName}/figs/{datasetName}_legend.pdf",
@@ -572,33 +572,33 @@ def mip_vs_greedy_plot(datasetName="Student", results=None, mips_time=None, gree
         os.makedirs(save_path)
 
     ### 1. Total Coverage Plot ###
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))
     ax.plot(k_values, mips_total_coverage.values(), label='MIP', linestyle='-', marker='o', color=color_mip, linewidth=2, markersize=6)
     ax.plot(k_values, greedy_total_coverage.values(), label='Greedy', linestyle='-', marker='x', color=color_greedy, linewidth=2, markersize=6)
     ax.set_xticks(k_values)
     ax.set_xlabel("k", fontsize=18)
     ax.set_ylabel("Coverage", fontsize=18)
     plt.tight_layout()
-    ax.legend(loc='best', frameon=False, fontsize=15)
+    ax.legend(loc='best', frameon=True, fontsize=15)
     plt.savefig(f"{save_path}total_coverage_{max_d}.pdf", bbox_inches='tight', dpi=300)
     plt.show()
 
     ### 2. Coverage per Group ###
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))
     for group_id in group_ids:
         linestyle = '-' if group_id == '0.0' else '--'
-        ax.plot(k_values, [results[group_id][k]['coverage_mip'] for k in k_values], label=f'MIP Group {group_id}', linestyle=linestyle, marker='o', color=color_mip, linewidth=2, markersize=6)
-        ax.plot(k_values, [results[group_id][k]['coverage_greedy'] for k in k_values], label=f'Greedy Group {group_id}', linestyle=linestyle, marker='x', color=color_greedy, linewidth=2, markersize=6)
+        ax.plot(k_values, [results[group_id][k]['coverage_mip'] for k in k_values], label=f'Group {int(float(group_id))} (MIP)', linestyle=linestyle, marker='o', color=color_mip, linewidth=2, markersize=6)
+        ax.plot(k_values, [results[group_id][k]['coverage_greedy'] for k in k_values], label=f'Group {int(float(group_id))} (Greedy)', linestyle=linestyle, marker='x', color=color_greedy, linewidth=2, markersize=6)
     ax.set_xticks(k_values)
     ax.set_xlabel("k", fontsize=18)
     ax.set_ylabel("Coverage", fontsize=18)
     plt.tight_layout()
-    ax.legend(loc='best', frameon=False, fontsize=15)
+    ax.legend(loc='best', frameon=True, fontsize=15)
     plt.savefig(f"{save_path}coverage_{max_d}.pdf", bbox_inches='tight', dpi=300)
     plt.show()
 
     ### 3. Time Plot ###
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))
     ax.plot(k_values, [mips_time[k] for k in k_values], label='MIP', linestyle='-', marker='o', color=color_mip, linewidth=2, markersize=6)
     ax.plot(k_values, [greedy_time[k] for k in k_values], label='Greedy', linestyle='-', marker='x', color=color_greedy, linewidth=2, markersize=6)
     ax.set_xticks(k_values)
@@ -606,20 +606,20 @@ def mip_vs_greedy_plot(datasetName="Student", results=None, mips_time=None, gree
     ax.set_ylabel("Time (s)", fontsize=18)
     ax.set_yscale('log')
     plt.tight_layout()
-    ax.legend(loc='best', frameon=False, fontsize=15)
+    ax.legend(loc='best', frameon=True, fontsize=15)
     plt.savefig(f"{save_path}time_{max_d}.pdf", bbox_inches='tight', dpi=300)
     plt.show()
 
     ### 4. CFEs Count ###
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))
     for group_id in group_ids:
         linestyle = '-' if group_id == '0.0' else '--'
-        ax.plot(k_values, [results[group_id][k]['num_cfes_mip'] for k in k_values], label=f'MIP Group {group_id}', linestyle=linestyle, marker='o', color=color_mip, linewidth=2, markersize=6)
-        ax.plot(k_values, [results[group_id][k]['num_cfes_greedy'] for k in k_values], label=f'Greedy Group {group_id}', linestyle=linestyle, marker='x', color=color_greedy, linewidth=2, markersize=6)
+        ax.plot(k_values, [results[group_id][k]['num_cfes_mip'] for k in k_values], label=f'Group {int(float(group_id))} (MIP)', linestyle=linestyle, marker='o', color=color_mip, linewidth=2, markersize=6)
+        ax.plot(k_values, [results[group_id][k]['num_cfes_greedy'] for k in k_values], label=f'Group {int(float(group_id))} (Greedy)', linestyle=linestyle, marker='x', color=color_greedy, linewidth=2, markersize=6)
     ax.set_xticks(k_values)
     ax.set_xlabel("k", fontsize=18)
     ax.set_ylabel("CFEs Count", fontsize=18)
-    ax.legend(loc='best', frameon=False, fontsize=15)
+    ax.legend(loc='best', frameon=True, fontsize=15)
     plt.tight_layout()
     plt.savefig(f"{save_path}cfes_count_{max_d}.pdf", bbox_inches='tight', dpi=300)
     plt.show()
