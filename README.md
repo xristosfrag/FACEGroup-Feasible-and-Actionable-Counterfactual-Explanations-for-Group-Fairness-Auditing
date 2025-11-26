@@ -7,6 +7,7 @@
 <sup>2</sup>Archimedes, Athena Research Center, Greece,
 <sup>3</sup>Boston University, USA
 
+[![arXiv](https://img.shields.io/badge/arXiv-2410.22591-b31b1b?logo=arxiv&logoColor=white&labelColor=555555)](https://arxiv.org/abs/2410.22591)
 [![License](https://img.shields.io/badge/License-MIT-red.svg)](https://opensource.org/licenses/MIT)
 
 </div>
@@ -15,9 +16,10 @@ This repository contains the official implementation of the paper: **FACEGroup: 
 
 ## Contents
 
-1.  [Abstract](#Abstract)
-2.  [Installation](#installation)
-3.  [Acknowledgement](#Acknowledgement)
+- [Contents](#contents)
+- [Abstract](#abstract)
+- [Installation](#installation)
+- [Acknowledgement](#acknowledgement)
 
 ## Abstract
 This paper introduces the first graph-based framework for generating group counterfactual explanations
